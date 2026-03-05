@@ -57,8 +57,18 @@ export class Mandelbrot extends ArtAlgorithm {
     };
 
     const canvasEl = p.canvas;
+    const container = canvasEl.parentElement;
+    const isThumbnail = container && container.classList.contains('gallery-card-canvas');
+
+    if (isThumbnail) return;
+
+    const sidebarIsOpen = () => {
+      const artView = canvasEl.closest('.art-view');
+      return artView && artView.classList.contains('sidebar-open');
+    };
 
     canvasEl.addEventListener('mousedown', (e) => {
+      if (sidebarIsOpen()) return;
       const rect = canvasEl.getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
@@ -66,6 +76,7 @@ export class Mandelbrot extends ArtAlgorithm {
     });
 
     canvasEl.addEventListener('touchstart', (e) => {
+      if (sidebarIsOpen()) return;
       if (!e.touches.length) return;
       e.preventDefault();
       const rect = canvasEl.getBoundingClientRect();
@@ -74,7 +85,6 @@ export class Mandelbrot extends ArtAlgorithm {
       zoomAt(px, py, true);
     }, { passive: false });
 
-    const container = canvasEl.parentElement;
     if (container && !container.querySelector('.zoom-controls')) {
       const zoomControls = document.createElement('div');
       zoomControls.className = 'zoom-controls';

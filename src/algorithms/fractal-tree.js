@@ -32,13 +32,15 @@ export class FractalTree extends ArtAlgorithm {
   draw(p, params) {
     p.background(params.bgColor);
 
-    const { depth, trunkLen, shrink, windStrength, thickness, trunkColor, leafColor, angle } = params;
+    const { depth, shrink, windStrength, thickness, trunkColor, leafColor, angle } = params;
+
+    const scaledTrunkLen = Math.min(params.trunkLen, p.height * 0.28);
 
     p.push();
     p.translate(p.width / 2, p.height);
 
     this.time += 0.02;
-    this.drawBranch(p, trunkLen, depth, angle, shrink, windStrength, thickness, trunkColor, leafColor, 0);
+    this.drawBranch(p, scaledTrunkLen, depth, angle, shrink, windStrength, thickness, trunkColor, leafColor, 0);
 
     p.pop();
   }
