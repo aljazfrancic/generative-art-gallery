@@ -142,7 +142,7 @@ body {
 
 .tag-pill {
   padding: 0.25rem 0.7rem;
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color);
   border-radius: 999px;
   background: var(--bg-control);
   color: var(--text-secondary);
@@ -154,13 +154,23 @@ body {
 }
 
 .tag-pill:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: transparent;
+  background-image: linear-gradient(var(--bg-card), var(--bg-card)),
+    linear-gradient(90deg, #ff6ec7, #7873f5, #4fc3f7, #81c784, #fff176, #ffb74d, #ff6ec7);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: gradient-shift 6s linear infinite;
+  color: var(--text-primary);
 }
 
 .tag-pill.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  border-color: transparent;
+  background-image: linear-gradient(90deg, #ff6ec7, #7873f5, #4fc3f7, #81c784, #fff176, #ffb74d, #ff6ec7);
+  background-origin: border-box;
+  background-clip: border-box;
+  background-size: 300% 100%;
+  animation: gradient-shift 6s linear infinite;
   color: #fff;
 }
 
@@ -177,7 +187,7 @@ body {
 
 .gallery-card {
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
@@ -186,8 +196,14 @@ body {
 }
 
 .gallery-card:hover {
-  border-color: var(--border-hover);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-glow);
+  border-color: transparent;
+  background-image: linear-gradient(var(--bg-card), var(--bg-card)),
+    linear-gradient(90deg, #ff6ec7, #7873f5, #4fc3f7, #81c784, #fff176, #ffb74d, #ff6ec7);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: gradient-shift 6s linear infinite;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .gallery-card-canvas {
@@ -203,6 +219,8 @@ body {
 
 .gallery-card-canvas canvas {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .gallery-card-info {
@@ -210,17 +228,25 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
-.card-info-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 
 .gallery-card-info h3 {
   font-family: var(--font-mono);
   font-size: 0.95rem;
   font-weight: 600;
   margin-bottom: 0.25rem;
+  transition: all var(--transition);
+}
+
+.gallery-card:hover .gallery-card-info h3 {
+  background: linear-gradient(
+    90deg,
+    #ff6ec7, #7873f5, #4fc3f7, #81c784, #fff176, #ffb74d, #ff6ec7
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 6s linear infinite;
 }
 
 .gallery-card-info p {
@@ -229,22 +255,6 @@ body {
   line-height: 1.4;
 }
 
-.fav-btn {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  transition: color var(--transition), transform var(--transition);
-  padding: 0.2rem;
-  line-height: 1;
-}
-
-.fav-btn:hover,
-.fav-btn.active {
-  color: var(--danger);
-  transform: scale(1.2);
-}
 
 .card-tags {
   display: flex;

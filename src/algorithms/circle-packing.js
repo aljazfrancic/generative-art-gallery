@@ -13,6 +13,7 @@ export class CirclePacking extends ArtAlgorithm {
   consecutiveFailures = 0;
   placementStopped = false;
   FAILURE_THRESHOLD = 1000;
+  doneFrames = 0;
 
   getControls() {
     return [
@@ -42,6 +43,7 @@ export class CirclePacking extends ArtAlgorithm {
     this.circles = [];
     this.consecutiveFailures = 0;
     this.placementStopped = false;
+    this.doneFrames = 0;
     p.background(params.bgColor);
   }
 
@@ -130,6 +132,14 @@ export class CirclePacking extends ArtAlgorithm {
           c.radius -= growSpeed;
           c.growing = false;
         }
+      }
+    }
+
+    if (this.placementStopped && this.circles.every(c => !c.growing)) {
+      this.doneFrames++;
+      if (this.doneFrames >= 60) {
+        this.setup(p, params);
+        return;
       }
     }
 

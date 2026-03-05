@@ -23,6 +23,7 @@ export class MazeGenerator extends ArtAlgorithm {
   state = 'generating';
   solutionPath = [];
   solutionIndex = 0;
+  doneFrames = 0;
 
   getControls() {
     return [
@@ -45,6 +46,7 @@ export class MazeGenerator extends ArtAlgorithm {
     this.state = 'generating';
     this.solutionPath = [];
     this.solutionIndex = 0;
+    this.doneFrames = 0;
   }
 
   initCells() {
@@ -208,6 +210,15 @@ export class MazeGenerator extends ArtAlgorithm {
       }
       if (this.solutionIndex < this.solutionPath.length - 1) {
         this.solutionIndex = Math.min(this.solutionIndex + 2, this.solutionPath.length - 1);
+      }
+    }
+
+    const isDone = this.state === 'done' &&
+      (!showSolution || this.solutionIndex >= this.solutionPath.length - 1);
+    if (isDone) {
+      this.doneFrames++;
+      if (this.doneFrames >= 60) {
+        this.setup(p, params);
       }
     }
   }

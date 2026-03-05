@@ -1,7 +1,10 @@
 import p5 from 'p5';
 
 const thumbnailInstances = [];
+const cardInstanceMap = new Map();
 let galleryObserver = null;
+let initQueue = [];
+let initTimer = null;
 
 const DARK_BG_COLORS = ['#0a0a0a', '#000000', '#0a0a0f', '#0a0f14'];
 const LIGHT_BG = '#f5f5f5';
@@ -20,33 +23,43 @@ function applyThemeBgOverrides(params) {
   }
 }
 
-function getFavorites() {
-  try { return JSON.parse(localStorage.getItem('favorites') || '[]'); }
-  catch { return []; }
-}
 
-function toggleFavorite(slug) {
-  const favs = getFavorites();
-  const idx = favs.indexOf(slug);
-  if (idx >= 0) favs.splice(idx, 1);
-  else favs.push(slug);
-  localStorage.setItem('favorites', JSON.stringify(favs));
-  return favs.includes(slug);
+
+function processInitQueue() {
+  if (initQueue.length === 0) {
+    initTimer = null;
+    return;
+  }
+  const { canvasWrap, AlgoClass, skeleton, card } = initQueue.shift();
+  const instance = createThumbnail(canvasWrap, AlgoClass, skeleton);
+  if (instance) cardInstanceMap.set(card, instance);
+  initTimer = setTimeout(processInitQueue, 150);
 }
 
 export function renderGallery(container, algorithms) {
   galleryObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
       const card = entry.target;
-      const canvasWrap = card.querySelector('.gallery-card-canvas');
-      const skeleton = canvasWrap?.querySelector('.skeleton-shimmer');
-      const slug = card.dataset.algoSlug;
-      const AlgoClass = algorithms.find(a => a.meta.slug === slug);
-      if (AlgoClass && canvasWrap) {
-        createThumbnail(canvasWrap, AlgoClass, skeleton);
+
+      if (entry.isIntersecting) {
+        const existing = cardInstanceMap.get(card);
+        if (existing) {
+          existing.loop();
+        } else if (!card.dataset.queued) {
+          card.dataset.queued = '1';
+          const canvasWrap = card.querySelector('.gallery-card-canvas');
+          const skeleton = canvasWrap?.querySelector('.skeleton-shimmer');
+          const slug = card.dataset.algoSlug;
+          const AlgoClass = algorithms.find(a => a.meta.slug === slug);
+          if (AlgoClass && canvasWrap) {
+            initQueue.push({ canvasWrap, AlgoClass, skeleton, card });
+            if (!initTimer) processInitQueue();
+          }
+        }
+      } else {
+        const existing = cardInstanceMap.get(card);
+        if (existing) existing.noLoop();
       }
-      galleryObserver.unobserve(card);
     }
   }, { rootMargin: '200px' });
 
@@ -54,16 +67,23 @@ export function renderGallery(container, algorithms) {
     const card = document.createElement('div');
     card.className = 'gallery-card';
     card.dataset.algoSlug = AlgoClass.meta.slug;
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.fav-btn')) return;
+    card.addEventListener('click', () => {
       location.hash = `#/art/${AlgoClass.meta.slug}`;
     });
 
+    let ticking = false;
+    let lastX = 0, lastY = 0;
     card.addEventListener('mousemove', (e) => {
       const rect = card.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width - 0.5;
-      const y = (e.clientY - rect.top) / rect.height - 0.5;
-      card.style.transform = `perspective(600px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-4px) scale(1.01)`;
+      lastX = (e.clientX - rect.left) / rect.width - 0.5;
+      lastY = (e.clientY - rect.top) / rect.height - 0.5;
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(() => {
+          card.style.transform = `perspective(600px) rotateY(${lastX * 6}deg) rotateX(${-lastY * 6}deg) translateY(-4px) scale(1.01)`;
+          ticking = false;
+        });
+      }
     });
     card.addEventListener('mouseleave', () => {
       card.style.transform = '';
@@ -81,25 +101,11 @@ export function renderGallery(container, algorithms) {
     const tags = (AlgoClass.meta.tags || []);
     const tagHtml = tags.map(t => `<span class="card-tag">${t}</span>`).join('');
 
-    const favs = getFavorites();
-    const isFav = favs.includes(AlgoClass.meta.slug);
-
     info.innerHTML = `
-      <div class="card-info-top">
-        <h3>${AlgoClass.meta.name}</h3>
-        <button class="fav-btn ${isFav ? 'active' : ''}" title="Favorite" data-slug="${AlgoClass.meta.slug}">${isFav ? '♥' : '♡'}</button>
-      </div>
+      <h3>${AlgoClass.meta.name}</h3>
       <p>${AlgoClass.meta.description}</p>
       ${tagHtml ? `<div class="card-tags">${tagHtml}</div>` : ''}
     `;
-
-    const favBtn = info.querySelector('.fav-btn');
-    favBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const nowFav = toggleFavorite(AlgoClass.meta.slug);
-      favBtn.textContent = nowFav ? '♥' : '♡';
-      favBtn.classList.toggle('active', nowFav);
-    });
 
     card.appendChild(canvasWrap);
     card.appendChild(info);
@@ -115,16 +121,19 @@ function createThumbnail(container, AlgoClass, skeleton) {
   applyThemeBgOverrides(params);
   const fps = 10;
 
+  let instance;
   const sketch = (p) => {
     p.setup = () => {
       const rect = container.getBoundingClientRect();
-      const w = Math.floor(rect.width);
-      const h = Math.floor(rect.height);
+      const w = Math.min(Math.floor(rect.width), 300);
+      const h = Math.min(Math.floor(rect.height), 225);
       p.pixelDensity(1);
       const canvas = p.createCanvas(w, h);
       canvas.parent(container);
       p.frameRate(fps);
       algo.setup(p, params);
+      canvas.elt.style.width = '100%';
+      canvas.elt.style.height = '100%';
       if (skeleton && skeleton.parentNode) skeleton.remove();
     };
 
@@ -133,11 +142,17 @@ function createThumbnail(container, AlgoClass, skeleton) {
     };
   };
 
-  const instance = new p5(sketch);
+  instance = new p5(sketch);
   thumbnailInstances.push(instance);
+  return instance;
 }
 
 export function destroyGallery() {
+  if (initTimer) {
+    clearTimeout(initTimer);
+    initTimer = null;
+  }
+  initQueue = [];
   if (galleryObserver) {
     galleryObserver.disconnect();
     galleryObserver = null;
@@ -146,4 +161,5 @@ export function destroyGallery() {
     inst.remove();
   }
   thumbnailInstances.length = 0;
+  cardInstanceMap.clear();
 }

@@ -135,30 +135,28 @@ export class ReactionDiffusion extends ArtAlgorithm {
       const t = Math.min(1, b * 2);
       return { r: Math.floor(255 * (1 - t)), g: Math.floor(128 + 127 * t), b: Math.floor(255 * t) };
     } else if (palette === 'heat') {
-      // Black -> red -> yellow -> white
-      let r, g, b;
+      let cr, cg, cb;
       if (b < 0.25) {
         const t = b * 4;
-        r = Math.floor(255 * t);
-        g = 0;
-        b = 0;
+        cr = Math.floor(255 * t);
+        cg = 0;
+        cb = 0;
       } else if (b < 0.5) {
         const t = (b - 0.25) * 4;
-        r = 255;
-        g = Math.floor(255 * t);
-        b = 0;
+        cr = 255;
+        cg = Math.floor(255 * t);
+        cb = 0;
       } else if (b < 0.75) {
         const t = (b - 0.5) * 4;
-        r = 255;
-        g = 255;
-        b = Math.floor(255 * t);
+        cr = 255;
+        cg = 255;
+        cb = Math.floor(255 * t);
       } else {
-        const t = (b - 0.75) * 4;
-        r = 255;
-        g = 255;
-        b = 255;
+        cr = 255;
+        cg = 255;
+        cb = 255;
       }
-      return { r, g, b };
+      return { r: cr, g: cg, b: cb };
     } else {
       // ocean: deep blue -> cyan -> white
       const t = Math.min(1, b * 1.5);

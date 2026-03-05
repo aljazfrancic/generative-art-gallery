@@ -19,7 +19,7 @@ export class Voronoi extends ArtAlgorithm {
         type: 'select',
         key: 'colorMode',
         label: 'Color Mode',
-        default: 'gradient',
+        default: 'random',
         options: [
           { value: 'random', label: 'Random' },
           { value: 'gradient', label: 'Gradient' },

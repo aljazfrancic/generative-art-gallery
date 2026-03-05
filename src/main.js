@@ -104,7 +104,7 @@ function showGallery() {
   titleRow.appendChild(themeBtn);
 
   const subtitle = document.createElement('p');
-  subtitle.textContent = 'Interactive algorithmic art — click to explore';
+  subtitle.textContent = 'Interactive algorithmic art — tap to explore';
 
   header.appendChild(titleRow);
   header.appendChild(subtitle);
@@ -374,7 +374,7 @@ function showArtView(slug, queryStr) {
   actions.appendChild(resetBtn);
   actions.appendChild(saveBtn);
   actions.appendChild(copyLinkBtn);
-  actions.appendChild(recordBtn);
+  if (slug !== 'mandelbrot') actions.appendChild(recordBtn);
   actions.appendChild(fullscreenBtn);
   actionsSection.appendChild(actions);
   sidebar.appendChild(actionsSection);
