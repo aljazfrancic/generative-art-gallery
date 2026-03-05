@@ -6,6 +6,7 @@ export class WaveInterference extends ArtAlgorithm {
     description:
       'Overlapping sine waves create mesmerizing moiré interference patterns with vibrant color channels.',
     slug: 'wave-interference',
+    tags: ['math', 'patterns'],
   };
 
   time = 0;
@@ -20,13 +21,14 @@ export class WaveInterference extends ArtAlgorithm {
       { type: 'toggle', key: 'colorChannels', label: 'Split RGB', default: true },
       { type: 'color', key: 'color1', label: 'Color A', default: '#7c6aef' },
       { type: 'color', key: 'color2', label: 'Color B', default: '#ef4444' },
+      { type: 'color', key: 'bgColor', label: 'Background', default: '#000000' },
     ];
   }
 
   setup(p, params) {
     this.time = 0;
     this.sources = this.generateSources(p, params.waveCount);
-    p.background(0);
+    p.background(params.bgColor || 0);
     p.pixelDensity(1);
   }
 
@@ -45,7 +47,7 @@ export class WaveInterference extends ArtAlgorithm {
   }
 
   draw(p, params) {
-    const { frequency, amplitude, speed, resolution, colorChannels, waveCount } = params;
+    const { frequency, speed, resolution, colorChannels, waveCount, amplitude } = params;
 
     if (!this.sources || this.sources.length !== waveCount) {
       this.sources = this.generateSources(p, waveCount);
@@ -112,6 +114,6 @@ export class WaveInterference extends ArtAlgorithm {
   reset(p, params) {
     this.time = 0;
     this.sources = this.generateSources(p, params.waveCount);
-    p.background(0);
+    p.background(params.bgColor || 0);
   }
 }

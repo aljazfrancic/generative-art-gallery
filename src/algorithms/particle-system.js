@@ -6,6 +6,7 @@ export class ParticleSystem extends ArtAlgorithm {
     description:
       'Particles burst from the center with gravity, repulsion, and evolving color — a miniature fireworks engine.',
     slug: 'particle-system',
+    tags: ['particles', 'physics'],
   };
 
   particles = [];
@@ -37,15 +38,16 @@ export class ParticleSystem extends ArtAlgorithm {
   }
 
   setup(p, params) {
+    p.background(params.bgColor);
     p.colorMode(p.HSB, 360, 100, 100, 100);
-    p.background(0, 0, 4);
     this.particles = [];
     this.hueOffset = 0;
   }
 
   draw(p, params) {
+    const bg = p.color(params.bgColor);
     p.colorMode(p.HSB, 360, 100, 100, 100);
-    p.background(0, 0, 4, params.trailFade);
+    p.background(p.hue(bg), p.saturation(bg), p.brightness(bg), params.trailFade);
 
     const { spawnRate, maxParticles, gravity, initialSpeed, size, lifetime, colorMode } = params;
 
@@ -106,7 +108,7 @@ export class ParticleSystem extends ArtAlgorithm {
   reset(p, params) {
     this.particles = [];
     this.hueOffset = 0;
+    p.background(params.bgColor);
     p.colorMode(p.HSB, 360, 100, 100, 100);
-    p.background(0, 0, 4);
   }
 }

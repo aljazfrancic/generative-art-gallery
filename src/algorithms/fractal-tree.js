@@ -6,6 +6,7 @@ export class FractalTree extends ArtAlgorithm {
     description:
       'Recursive branching structures grow organically, swaying in a gentle procedural wind.',
     slug: 'fractal-tree',
+    tags: ['fractal', 'recursive'],
   };
 
   time = 0;

@@ -6,6 +6,7 @@ export class FlowField extends ArtAlgorithm {
     description:
       'Particles trace paths through a Perlin noise vector field, leaving luminous trails that reveal hidden currents.',
     slug: 'flow-field',
+    tags: ['noise', 'particles'],
   };
 
   particles = [];

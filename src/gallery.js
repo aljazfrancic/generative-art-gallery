@@ -1,46 +1,131 @@
 import p5 from 'p5';
 
 const thumbnailInstances = [];
+let galleryObserver = null;
+
+const DARK_BG_COLORS = ['#0a0a0a', '#000000', '#0a0a0f', '#0a0f14'];
+const LIGHT_BG = '#f5f5f5';
+const BG_KEYS = ['bgColor', 'deadColor', 'pathColor'];
+
+function applyThemeBgOverrides(params) {
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  for (const key of BG_KEYS) {
+    if (!(key in params)) continue;
+    const val = params[key].toLowerCase();
+    if (light && DARK_BG_COLORS.includes(val)) {
+      params[key] = LIGHT_BG;
+    } else if (!light && val === LIGHT_BG) {
+      params[key] = '#0a0a0a';
+    }
+  }
+}
+
+function getFavorites() {
+  try { return JSON.parse(localStorage.getItem('favorites') || '[]'); }
+  catch { return []; }
+}
+
+function toggleFavorite(slug) {
+  const favs = getFavorites();
+  const idx = favs.indexOf(slug);
+  if (idx >= 0) favs.splice(idx, 1);
+  else favs.push(slug);
+  localStorage.setItem('favorites', JSON.stringify(favs));
+  return favs.includes(slug);
+}
 
 export function renderGallery(container, algorithms) {
+  galleryObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const card = entry.target;
+      const canvasWrap = card.querySelector('.gallery-card-canvas');
+      const skeleton = canvasWrap?.querySelector('.skeleton-shimmer');
+      const slug = card.dataset.algoSlug;
+      const AlgoClass = algorithms.find(a => a.meta.slug === slug);
+      if (AlgoClass && canvasWrap) {
+        createThumbnail(canvasWrap, AlgoClass, skeleton);
+      }
+      galleryObserver.unobserve(card);
+    }
+  }, { rootMargin: '200px' });
+
   for (const AlgoClass of algorithms) {
     const card = document.createElement('div');
     card.className = 'gallery-card';
-    card.addEventListener('click', () => {
+    card.dataset.algoSlug = AlgoClass.meta.slug;
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.fav-btn')) return;
       location.hash = `#/art/${AlgoClass.meta.slug}`;
+    });
+
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      card.style.transform = `perspective(600px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-4px) scale(1.01)`;
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = '';
     });
 
     const canvasWrap = document.createElement('div');
     canvasWrap.className = 'gallery-card-canvas';
+    const skeleton = document.createElement('div');
+    skeleton.className = 'skeleton-shimmer';
+    canvasWrap.appendChild(skeleton);
 
     const info = document.createElement('div');
     info.className = 'gallery-card-info';
+
+    const tags = (AlgoClass.meta.tags || []);
+    const tagHtml = tags.map(t => `<span class="card-tag">${t}</span>`).join('');
+
+    const favs = getFavorites();
+    const isFav = favs.includes(AlgoClass.meta.slug);
+
     info.innerHTML = `
-      <h3>${AlgoClass.meta.name}</h3>
+      <div class="card-info-top">
+        <h3>${AlgoClass.meta.name}</h3>
+        <button class="fav-btn ${isFav ? 'active' : ''}" title="Favorite" data-slug="${AlgoClass.meta.slug}">${isFav ? '♥' : '♡'}</button>
+      </div>
       <p>${AlgoClass.meta.description}</p>
+      ${tagHtml ? `<div class="card-tags">${tagHtml}</div>` : ''}
     `;
+
+    const favBtn = info.querySelector('.fav-btn');
+    favBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nowFav = toggleFavorite(AlgoClass.meta.slug);
+      favBtn.textContent = nowFav ? '♥' : '♡';
+      favBtn.classList.toggle('active', nowFav);
+    });
 
     card.appendChild(canvasWrap);
     card.appendChild(info);
     container.appendChild(card);
 
-    createThumbnail(canvasWrap, AlgoClass);
+    galleryObserver.observe(card);
   }
 }
 
-function createThumbnail(container, AlgoClass) {
+function createThumbnail(container, AlgoClass, skeleton) {
   const algo = new AlgoClass();
   const params = algo.getDefaultParams();
+  applyThemeBgOverrides(params);
+  const fps = 10;
 
   const sketch = (p) => {
     p.setup = () => {
       const rect = container.getBoundingClientRect();
       const w = Math.floor(rect.width);
       const h = Math.floor(rect.height);
+      p.pixelDensity(1);
       const canvas = p.createCanvas(w, h);
       canvas.parent(container);
-      p.frameRate(15);
+      p.frameRate(fps);
       algo.setup(p, params);
+      if (skeleton && skeleton.parentNode) skeleton.remove();
     };
 
     p.draw = () => {
@@ -53,6 +138,10 @@ function createThumbnail(container, AlgoClass) {
 }
 
 export function destroyGallery() {
+  if (galleryObserver) {
+    galleryObserver.disconnect();
+    galleryObserver = null;
+  }
   for (const inst of thumbnailInstances) {
     inst.remove();
   }

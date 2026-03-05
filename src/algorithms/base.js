@@ -13,6 +13,8 @@ export class ArtAlgorithm {
 
   draw(p, params) {}
 
+  mouseMoved(p, params, mx, my) {}
+
   reset(p, params) {
     p.clear();
     this.setup(p, params);
