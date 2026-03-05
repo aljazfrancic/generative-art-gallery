@@ -1,18 +1,23 @@
 # Generative Art Gallery
 
-An interactive gallery of generative art algorithms built with p5.js. Explore flow fields, fractals, particle systems, and more — all rendered in real time with adjustable parameters.
+An interactive gallery of generative art algorithms built with p5.js. Explore flow fields, fractals, particle systems, reaction-diffusion patterns, and more — all rendered in real time with adjustable parameters.
 
 **[Live Demo](https://aljazfrancic.github.io/generative-art-gallery/)**
 
 ## Features
 
-- **5 generative art algorithms** with real-time rendering
+- **13 generative art algorithms** with real-time rendering
 - **Interactive controls** — sliders, color pickers, toggles, and dropdowns to shape each artwork
+- **Dark / Light theme** — toggle between themes; thumbnails and backgrounds update to match
+- **Tag filtering** — browse algorithms by category (fractal, math, particles, simulation, etc.)
 - **Randomize** — generate unexpected variations with one click
 - **Save as PNG** — export any creation at full resolution
+- **Record video** — capture animations as WebM/MP4 directly in the browser
 - **Fullscreen mode** — immersive viewing with native Fullscreen API
-- **Mobile-friendly** — responsive layout, touch-optimized controls, collapsible sidebar
-- **Gallery view** — animated preview thumbnails for every algorithm
+- **Shareable URLs** — parameter state is encoded in the URL for easy sharing
+- **Keyboard shortcuts** — arrow keys to navigate, `R` to randomize, `S` to save, `F` for fullscreen
+- **Mobile-friendly** — responsive layout, touch-optimized controls, collapsible sidebar, pinch-to-zoom and pan on supported algorithms
+- **Gallery view** — continuously animated preview thumbnails with lazy loading and performance optimizations
 - **No backend** — pure static site, deployable anywhere
 
 ## Algorithms
@@ -23,14 +28,22 @@ An interactive gallery of generative art algorithms built with p5.js. Explore fl
 | **Fractal Tree** | Recursive branching structures grow organically, swaying in a gentle procedural wind. |
 | **Particle System** | Particles burst from the center with gravity, repulsion, and evolving color — a miniature fireworks engine. |
 | **Wave Interference** | Overlapping sine waves create mesmerizing moiré interference patterns with vibrant color channels. |
-| **Mandelbrot Set** | Explore the infinite complexity of the Mandelbrot and Julia fractals. Click (or tap) to zoom in, right-click to zoom out. |
+| **Mandelbrot Set** | Explore the infinite complexity of the Mandelbrot and Julia fractals. Click to zoom in, right-click to zoom out. Supports pinch-to-zoom and pan on mobile. |
+| **Voronoi Diagram** | Animated Voronoi cells colored by distance to drifting seed points. Pixel-rendered with random, gradient, or monochrome modes. |
+| **Cellular Automata** | Conway's Game of Life on a wrapping grid. Choose Life, HighLife, or Day & Night rule variants with customizable colors. |
+| **Spirograph** | Parametric hypotrochoid curves drawn incrementally with adjustable radii and pen distance. |
+| **Reaction-Diffusion** | Gray-Scott model: two chemicals interact on a grid to form organic, evolving patterns. Chemical, heat, and ocean palettes. |
+| **Perlin Landscape** | Scrolling 3D wireframe terrain rendered with Perlin noise and fake perspective projection. |
+| **Lissajous Curves** | Parametric curves x = A·sin(a·t + δ), y = B·sin(b·t) drawn with trailing lines and optional rainbow coloring. |
+| **Circle Packing** | Progressively fills the canvas with non-overlapping circles that grow until they touch edges or each other. |
+| **Maze Generator** | Animated recursive backtracker maze generation with optional BFS path solution visualization. |
 
 ## Tech Stack
 
 - **[p5.js](https://p5js.org/)** — Canvas rendering in instance mode
 - **Vanilla JavaScript** — ES modules, no framework
 - **[Vite](https://vite.dev/)** — Dev server and production build
-- **CSS** — Custom properties, responsive design, dark theme
+- **CSS** — Custom properties, dark/light themes, responsive design, animated gradients
 - **GitHub Actions** — Automated deployment to GitHub Pages
 
 ## Getting Started
@@ -67,6 +80,35 @@ To enable it on your fork:
 
 The site will be available at `https://<username>.github.io/generative-art-gallery/`.
 
+## Project Structure
+
+```
+src/
+├── main.js              # App entry point, routing, theme, UI orchestration
+├── gallery.js           # Gallery grid, lazy-loaded thumbnails, tag filtering
+├── controls.js          # Dynamic parameter control builder (sliders, pickers, etc.)
+├── export.js            # PNG save and fullscreen toggle
+├── gif-export.js        # Video recording via MediaRecorder API
+├── styles/
+│   └── main.css         # All styling, themes, responsive layout
+└── algorithms/
+    ├── base.js           # ArtAlgorithm base class
+    ├── registry.js       # Algorithm registry and slug lookup
+    ├── flow-field.js
+    ├── fractal-tree.js
+    ├── particle-system.js
+    ├── wave-interference.js
+    ├── mandelbrot.js
+    ├── voronoi.js
+    ├── cellular-automata.js
+    ├── spirograph.js
+    ├── reaction-diffusion.js
+    ├── perlin-landscape.js
+    ├── lissajous.js
+    ├── circle-packing.js
+    └── maze-generator.js
+```
+
 ## Adding a New Algorithm
 
 1. Create a new file in `src/algorithms/`, e.g. `my-algorithm.js`
@@ -80,6 +122,7 @@ export class MyAlgorithm extends ArtAlgorithm {
     name: 'My Algorithm',
     description: 'A short description of what it does.',
     slug: 'my-algorithm',
+    tags: ['category'],
   };
 
   getControls() {
@@ -87,6 +130,7 @@ export class MyAlgorithm extends ArtAlgorithm {
       { type: 'slider', key: 'speed', label: 'Speed', min: 0.1, max: 5, step: 0.1, default: 1 },
       { type: 'color', key: 'color', label: 'Color', default: '#7c6aef' },
       { type: 'toggle', key: 'trails', label: 'Show Trails', default: true },
+      { type: 'select', key: 'mode', label: 'Mode', options: ['A', 'B'], default: 'A' },
     ];
   }
 
