@@ -196,7 +196,7 @@ function showArtView(slug, queryStr) {
   const topbarLeft = document.createElement('div');
   topbarLeft.className = 'art-topbar-left';
   topbarLeft.innerHTML = `
-    <button class="btn-back" onclick="location.hash='#/'">&larr; Gallery</button>
+    <button class="btn-back" onclick="location.hash='#/'">⬅️ Gallery</button>
     <h2>${AlgoClass.meta.name}</h2>
   `;
 
@@ -218,13 +218,13 @@ function showArtView(slug, queryStr) {
   const prevBtn = document.createElement('button');
   prevBtn.className = 'btn btn-icon';
   prevBtn.title = prevAlgo.meta.name;
-  prevBtn.innerHTML = '&larr;';
+  prevBtn.innerHTML = '⬅️';
   prevBtn.addEventListener('click', () => { location.hash = `#/art/${prevAlgo.meta.slug}`; });
 
   const nextBtn = document.createElement('button');
   nextBtn.className = 'btn btn-icon';
   nextBtn.title = nextAlgo.meta.name;
-  nextBtn.innerHTML = '&rarr;';
+  nextBtn.innerHTML = '➡️';
   nextBtn.addEventListener('click', () => { location.hash = `#/art/${nextAlgo.meta.slug}`; });
 
   const sidebarToggle = document.createElement('button');
@@ -385,7 +385,7 @@ function showArtView(slug, queryStr) {
   helpSection.innerHTML = `
     <h3>Keyboard Shortcuts</h3>
     <div class="shortcuts-list">
-      <span class="shortcut"><kbd>←</kbd><kbd>→</kbd> Prev / Next</span>
+      <span class="shortcut"><kbd>⬅️</kbd><kbd>➡️</kbd> Prev / Next</span>
       <span class="shortcut"><kbd>S</kbd> Save PNG</span>
       <span class="shortcut"><kbd>F</kbd> Fullscreen</span>
       <span class="shortcut"><kbd>R</kbd> Randomize</span>
