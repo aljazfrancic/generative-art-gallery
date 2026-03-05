@@ -47,22 +47,26 @@ export class Mandelbrot extends ArtAlgorithm {
     p.noLoop();
     this.render(p, params);
 
-    p.mousePressed = () => {
-      if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
-
+    const zoomAt = (px, py, zoomIn) => {
       const scaleX = 3.5 / this.zoom / p.width;
       const scaleY = 2.5 / this.zoom / p.height;
-
-      this.centerX += (p.mouseX - p.width / 2) * scaleX;
-      this.centerY += (p.mouseY - p.height / 2) * scaleY;
-
-      if (p.mouseButton === p.RIGHT) {
-        this.zoom *= 0.5;
-      } else {
-        this.zoom *= 2.5;
-      }
-
+      this.centerX += (px - p.width / 2) * scaleX;
+      this.centerY += (py - p.height / 2) * scaleY;
+      this.zoom *= zoomIn ? 2.5 : 0.5;
       this.render(p, params);
+    };
+
+    p.mousePressed = () => {
+      if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+      zoomAt(p.mouseX, p.mouseY, p.mouseButton !== p.RIGHT);
+      return false;
+    };
+
+    p.touchStarted = () => {
+      if (!p.touches.length) return;
+      const t = p.touches[0];
+      if (t.x < 0 || t.x > p.width || t.y < 0 || t.y > p.height) return;
+      zoomAt(t.x, t.y, true);
       return false;
     };
   }

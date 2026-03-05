@@ -4,5 +4,22 @@ export function savePNG(p5Instance, algorithmName) {
 }
 
 export function toggleFullscreen(artView) {
-  artView.classList.toggle('fullscreen');
+  const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+
+  if (!fsElement) {
+    const request = artView.requestFullscreen || artView.webkitRequestFullscreen;
+    if (request) {
+      request.call(artView).catch(() => {
+        artView.classList.toggle('fullscreen');
+      });
+    } else {
+      artView.classList.toggle('fullscreen');
+    }
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) {
+      exit.call(document);
+    }
+    artView.classList.remove('fullscreen');
+  }
 }

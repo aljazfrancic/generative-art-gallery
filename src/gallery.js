@@ -31,11 +31,12 @@ export function renderGallery(container, algorithms) {
 function createThumbnail(container, AlgoClass) {
   const algo = new AlgoClass();
   const params = algo.getDefaultParams();
-  const SIZE = 300;
 
   const sketch = (p) => {
     p.setup = () => {
-      const canvas = p.createCanvas(SIZE, SIZE);
+      const rect = container.getBoundingClientRect();
+      const size = Math.min(300, Math.floor(rect.width), Math.floor(rect.height));
+      const canvas = p.createCanvas(size, size);
       canvas.parent(container);
       p.frameRate(15);
       algo.setup(p, params);

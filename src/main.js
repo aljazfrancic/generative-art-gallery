@@ -102,7 +102,16 @@ function showArtView(slug) {
     location.hash = `#/art/${nextAlgo.meta.slug}`;
   });
 
+  const sidebarToggle = document.createElement('button');
+  sidebarToggle.className = 'btn btn-icon btn-sidebar-toggle';
+  sidebarToggle.title = 'Toggle Controls';
+  sidebarToggle.textContent = '☰';
+  sidebarToggle.addEventListener('click', () => {
+    view.classList.toggle('sidebar-open');
+  });
+
   topbar.appendChild(topbarLeft);
+  topbar.appendChild(sidebarToggle);
   topbar.appendChild(topbarNav);
 
   const canvasContainer = document.createElement('div');
@@ -232,8 +241,9 @@ function showArtView(slug) {
 
 function canvasDimensions(container) {
   const rect = container.getBoundingClientRect();
-  const w = Math.floor(rect.width - 32);
-  const h = Math.floor(rect.height - 32);
+  const pad = window.innerWidth <= 600 ? 8 : 32;
+  const w = Math.floor(rect.width - pad);
+  const h = Math.floor(rect.height - pad);
   return { w: Math.max(w, 200), h: Math.max(h, 200) };
 }
 
