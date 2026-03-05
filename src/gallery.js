@@ -35,8 +35,9 @@ function createThumbnail(container, AlgoClass) {
   const sketch = (p) => {
     p.setup = () => {
       const rect = container.getBoundingClientRect();
-      const size = Math.min(300, Math.floor(rect.width), Math.floor(rect.height));
-      const canvas = p.createCanvas(size, size);
+      const w = Math.floor(rect.width);
+      const h = Math.floor(rect.height);
+      const canvas = p.createCanvas(w, h);
       canvas.parent(container);
       p.frameRate(15);
       algo.setup(p, params);
