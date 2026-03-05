@@ -205,7 +205,7 @@ body {
 }
 
 .btn-sidebar-toggle {
-  display: none;
+  display: inline-flex;
 }
 
 .art-sidebar {
@@ -213,10 +213,14 @@ body {
   flex-shrink: 0;
   background: var(--bg-sidebar);
   border-left: 1px solid var(--border-color);
-  display: flex;
+  display: none;
   flex-direction: column;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.art-view.sidebar-open .art-sidebar {
+  display: flex;
 }
 
 .sidebar-section {
@@ -499,11 +503,8 @@ select.control-select:focus {
     display: none;
   }
 
-  .btn-sidebar-toggle {
-    display: inline-flex;
-  }
-
   .art-sidebar {
+    display: flex;
     position: absolute;
     bottom: 0;
     left: 0;

@@ -227,6 +227,9 @@ function showArtView(slug) {
   currentP5 = new p5(sketch);
 
   canvasContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvasContainer.addEventListener('click', () => {
+    view.classList.remove('sidebar-open');
+  });
 
   resizeHandler = () => {
     if (!currentP5) return;
