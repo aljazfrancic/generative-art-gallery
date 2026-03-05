@@ -6,7 +6,7 @@ export class Mandelbrot extends ArtAlgorithm {
     description:
       'Explore the infinite complexity of the Mandelbrot and Julia fractals. Click to zoom in, right-click to zoom out.',
     slug: 'mandelbrot',
-    tags: ['fractal', 'interactive', 'math'],
+    tags: ['fractal', 'math'],
   };
 
   centerX = -0.5;

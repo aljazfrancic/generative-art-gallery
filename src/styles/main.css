@@ -178,7 +178,7 @@ body {
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 1.5rem;
   max-width: 1200px;
   margin: 0 auto;
@@ -209,6 +209,7 @@ body {
 .gallery-card-canvas {
   width: 100%;
   aspect-ratio: 4 / 3;
+  min-height: 220px;
   background: var(--bg-primary);
   display: flex;
   align-items: center;
@@ -858,10 +859,6 @@ select.control-select:focus {
   .art-topbar {
     padding: 0.5rem 0.75rem;
     gap: 0.25rem;
-  }
-
-  .art-topbar-nav .btn-theme {
-    display: none;
   }
 
   .art-topbar-nav {

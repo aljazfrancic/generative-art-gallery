@@ -125,8 +125,8 @@ function createThumbnail(container, AlgoClass, skeleton) {
   const sketch = (p) => {
     p.setup = () => {
       const rect = container.getBoundingClientRect();
-      const w = Math.min(Math.floor(rect.width), 300);
-      const h = Math.min(Math.floor(rect.height), 225);
+      const w = Math.min(Math.floor(rect.width), 340);
+      const h = Math.min(Math.floor(rect.height), 255);
       p.pixelDensity(1);
       const canvas = p.createCanvas(w, h);
       canvas.parent(container);
@@ -138,6 +138,9 @@ function createThumbnail(container, AlgoClass, skeleton) {
     };
 
     p.draw = () => {
+      if (AlgoClass.meta.slug === 'reaction-diffusion' && p.frameCount > 0 && p.frameCount % 300 === 0) {
+        algo.reset(p, params);
+      }
       algo.draw(p, params);
     };
   };

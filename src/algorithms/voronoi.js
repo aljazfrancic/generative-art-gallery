@@ -6,7 +6,7 @@ export class Voronoi extends ArtAlgorithm {
     description:
       'Animated Voronoi cells colored by distance to drifting seed points. Pixel-rendered with gradient or monochrome modes.',
     slug: 'voronoi',
-    tags: ['geometry', 'interactive'],
+    tags: ['geometry'],
   };
 
   seeds = [];

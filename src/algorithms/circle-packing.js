@@ -6,7 +6,7 @@ export class CirclePacking extends ArtAlgorithm {
     description:
       'Progressively fills the canvas with non-overlapping circles that grow until they touch edges or each other.',
     slug: 'circle-packing',
-    tags: ['geometry', 'interactive'],
+    tags: ['geometry'],
   };
 
   circles = [];
