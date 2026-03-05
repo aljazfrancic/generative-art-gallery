@@ -110,8 +110,9 @@ function showArtView(slug) {
     view.classList.toggle('sidebar-open');
   });
 
+  topbarNav.appendChild(sidebarToggle);
+
   topbar.appendChild(topbarLeft);
-  topbar.appendChild(sidebarToggle);
   topbar.appendChild(topbarNav);
 
   const canvasContainer = document.createElement('div');
