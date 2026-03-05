@@ -56,19 +56,50 @@ export class Mandelbrot extends ArtAlgorithm {
       this.render(p, params);
     };
 
-    p.mousePressed = () => {
-      if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
-      zoomAt(p.mouseX, p.mouseY, p.mouseButton !== p.RIGHT);
-      return false;
-    };
+    const canvasEl = p.canvas;
 
-    p.touchStarted = () => {
-      if (!p.touches.length) return;
-      const t = p.touches[0];
-      if (t.x < 0 || t.x > p.width || t.y < 0 || t.y > p.height) return;
-      zoomAt(t.x, t.y, true);
-      return false;
-    };
+    canvasEl.addEventListener('mousedown', (e) => {
+      const rect = canvasEl.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      zoomAt(px, py, e.button !== 2);
+    });
+
+    canvasEl.addEventListener('touchstart', (e) => {
+      if (!e.touches.length) return;
+      e.preventDefault();
+      const rect = canvasEl.getBoundingClientRect();
+      const px = e.touches[0].clientX - rect.left;
+      const py = e.touches[0].clientY - rect.top;
+      zoomAt(px, py, true);
+    }, { passive: false });
+
+    const container = canvasEl.parentElement;
+    if (container && !container.querySelector('.zoom-controls')) {
+      const zoomControls = document.createElement('div');
+      zoomControls.className = 'zoom-controls';
+
+      const zoomIn = document.createElement('button');
+      zoomIn.className = 'btn btn-icon zoom-btn';
+      zoomIn.textContent = '+';
+      zoomIn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        zoomAt(p.width / 2, p.height / 2, true);
+      });
+
+      const zoomOut = document.createElement('button');
+      zoomOut.className = 'btn btn-icon zoom-btn';
+      zoomOut.textContent = '−';
+      zoomOut.addEventListener('click', (e) => {
+        e.stopPropagation();
+        zoomAt(p.width / 2, p.height / 2, false);
+      });
+
+      zoomControls.appendChild(zoomIn);
+      zoomControls.appendChild(zoomOut);
+      container.style.position = 'relative';
+      container.appendChild(zoomControls);
+    }
   }
 
   draw() {}

@@ -465,6 +465,45 @@ select.control-select:focus {
   width: 100%;
 }
 
+/* ─── Zoom Controls ──────────────────────────────────────── */
+
+.zoom-controls {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  z-index: 10;
+}
+
+.zoom-btn {
+  width: 40px;
+  height: 40px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(4px);
+  border-color: var(--border-hover);
+}
+
+.zoom-btn:hover {
+  background: rgba(40, 40, 40, 0.9);
+}
+
+@media (max-width: 600px) {
+  .zoom-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.5rem;
+  }
+
+  .zoom-controls {
+    bottom: 1rem;
+    right: 1rem;
+  }
+}
+
 /* ─── Animations ─────────────────────────────────────────── */
 
 @keyframes fadeIn {
