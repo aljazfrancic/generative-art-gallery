@@ -47,13 +47,29 @@ export class Mandelbrot extends ArtAlgorithm {
     p.noLoop();
     this.render(p, params);
 
-    const zoomAt = (px, py, zoomIn) => {
+    const viewSize = () => {
       const aspect = p.width / p.height;
       const viewH = 3.5 / this.zoom;
-      const viewW = viewH * aspect;
+      return { viewW: viewH * aspect, viewH };
+    };
+
+    const zoomAt = (px, py, zoomIn) => {
+      const { viewW, viewH } = viewSize();
       this.centerX += (px - p.width / 2) * (viewW / p.width);
       this.centerY += (py - p.height / 2) * (viewH / p.height);
       this.zoom *= zoomIn ? 2.5 : 0.5;
+      this.render(p, params);
+    };
+
+    const panBy = (dx, dy) => {
+      const { viewW, viewH } = viewSize();
+      this.centerX -= dx * (viewW / p.width);
+      this.centerY -= dy * (viewH / p.height);
+      this.render(p, params);
+    };
+
+    const zoomBy = (factor) => {
+      this.zoom *= factor;
       this.render(p, params);
     };
 
@@ -68,46 +84,118 @@ export class Mandelbrot extends ArtAlgorithm {
       return artView && artView.classList.contains('sidebar-open');
     };
 
+    // Desktop: click to zoom, drag to pan
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let hasDragged = false;
+
     canvasEl.addEventListener('mousedown', (e) => {
       if (sidebarIsOpen()) return;
-      const rect = canvasEl.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
-      zoomAt(px, py, e.button !== 2);
+      isDragging = true;
+      hasDragged = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
     });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged = true;
+      if (hasDragged) {
+        panBy(dx, dy);
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (!hasDragged && !sidebarIsOpen()) {
+        const rect = canvasEl.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        if (px >= 0 && px <= p.width && py >= 0 && py <= p.height) {
+          zoomAt(px, py, e.button !== 2);
+        }
+      }
+    });
+
+    // Mouse wheel zoom
+    canvasEl.addEventListener('wheel', (e) => {
+      if (sidebarIsOpen()) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.3 : 0.77);
+    }, { passive: false });
+
+    // Touch: one finger = pan, two fingers = pinch zoom
+    let lastTouches = null;
 
     canvasEl.addEventListener('touchstart', (e) => {
       if (sidebarIsOpen()) return;
-      if (!e.touches.length) return;
       e.preventDefault();
-      const rect = canvasEl.getBoundingClientRect();
-      const px = e.touches[0].clientX - rect.left;
-      const py = e.touches[0].clientY - rect.top;
-      zoomAt(px, py, true);
+      lastTouches = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }));
     }, { passive: false });
 
+    canvasEl.addEventListener('touchmove', (e) => {
+      if (sidebarIsOpen() || !lastTouches) return;
+      e.preventDefault();
+      const current = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }));
+
+      if (current.length === 1 && lastTouches.length === 1) {
+        const dx = current[0].x - lastTouches[0].x;
+        const dy = current[0].y - lastTouches[0].y;
+        panBy(dx, dy);
+      } else if (current.length >= 2 && lastTouches.length >= 2) {
+        const prevDist = Math.hypot(lastTouches[1].x - lastTouches[0].x, lastTouches[1].y - lastTouches[0].y);
+        const currDist = Math.hypot(current[1].x - current[0].x, current[1].y - current[0].y);
+        if (prevDist > 0) {
+          zoomBy(currDist / prevDist);
+        }
+
+        const prevMidX = (lastTouches[0].x + lastTouches[1].x) / 2;
+        const prevMidY = (lastTouches[0].y + lastTouches[1].y) / 2;
+        const currMidX = (current[0].x + current[1].x) / 2;
+        const currMidY = (current[0].y + current[1].y) / 2;
+        panBy(currMidX - prevMidX, currMidY - prevMidY);
+      }
+
+      lastTouches = current;
+    }, { passive: false });
+
+    canvasEl.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0) {
+        lastTouches = null;
+      } else {
+        lastTouches = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }));
+      }
+    });
+
+    // +/- zoom buttons
     if (container && !container.querySelector('.zoom-controls')) {
       const zoomControls = document.createElement('div');
       zoomControls.className = 'zoom-controls';
 
-      const zoomIn = document.createElement('button');
-      zoomIn.className = 'btn btn-icon zoom-btn';
-      zoomIn.textContent = '+';
-      zoomIn.addEventListener('click', (e) => {
+      const zoomInBtn = document.createElement('button');
+      zoomInBtn.className = 'btn btn-icon zoom-btn';
+      zoomInBtn.textContent = '+';
+      zoomInBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        zoomAt(p.width / 2, p.height / 2, true);
+        zoomBy(2.5);
       });
 
-      const zoomOut = document.createElement('button');
-      zoomOut.className = 'btn btn-icon zoom-btn';
-      zoomOut.textContent = '−';
-      zoomOut.addEventListener('click', (e) => {
+      const zoomOutBtn = document.createElement('button');
+      zoomOutBtn.className = 'btn btn-icon zoom-btn';
+      zoomOutBtn.textContent = '−';
+      zoomOutBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        zoomAt(p.width / 2, p.height / 2, false);
+        zoomBy(0.4);
       });
 
-      zoomControls.appendChild(zoomIn);
-      zoomControls.appendChild(zoomOut);
+      zoomControls.appendChild(zoomInBtn);
+      zoomControls.appendChild(zoomOutBtn);
       container.style.position = 'relative';
       container.appendChild(zoomControls);
     }
