@@ -48,10 +48,11 @@ export class Mandelbrot extends ArtAlgorithm {
     this.render(p, params);
 
     const zoomAt = (px, py, zoomIn) => {
-      const scaleX = 3.5 / this.zoom / p.width;
-      const scaleY = 2.5 / this.zoom / p.height;
-      this.centerX += (px - p.width / 2) * scaleX;
-      this.centerY += (py - p.height / 2) * scaleY;
+      const aspect = p.width / p.height;
+      const viewH = 3.5 / this.zoom;
+      const viewW = viewH * aspect;
+      this.centerX += (px - p.width / 2) * (viewW / p.width);
+      this.centerY += (py - p.height / 2) * (viewH / p.height);
       this.zoom *= zoomIn ? 2.5 : 0.5;
       this.render(p, params);
     };
@@ -121,10 +122,13 @@ export class Mandelbrot extends ArtAlgorithm {
 
     p.loadPixels();
 
-    const xMin = this.centerX - 3.5 / this.zoom / 2;
-    const yMin = this.centerY - 2.5 / this.zoom / 2;
-    const xScale = 3.5 / this.zoom / w;
-    const yScale = 2.5 / this.zoom / h;
+    const aspect = w / h;
+    const viewH = 3.5 / this.zoom;
+    const viewW = viewH * aspect;
+    const xMin = this.centerX - viewW / 2;
+    const yMin = this.centerY - viewH / 2;
+    const xScale = viewW / w;
+    const yScale = viewH / h;
 
     for (let px = 0; px < w; px++) {
       for (let py = 0; py < h; py++) {
