@@ -127,7 +127,7 @@ function createThumbnail(container, AlgoClass, skeleton) {
       const rect = container.getBoundingClientRect();
       const w = Math.max(1, Math.floor(rect.width));
       const h = Math.max(1, Math.floor(rect.height));
-      p.pixelDensity(1);
+      p.pixelDensity(Math.min(p.displayDensity(), 2));
       const canvas = p.createCanvas(w, h);
       canvas.parent(container);
       p.frameRate(fps);
