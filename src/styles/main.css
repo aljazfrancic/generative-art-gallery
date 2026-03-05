@@ -74,10 +74,20 @@ body {
   font-size: 2.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--text-primary), var(--accent));
+  background: linear-gradient(
+    90deg,
+    #ff6ec7, #7873f5, #4fc3f7, #81c784, #fff176, #ffb74d, #ff6ec7
+  );
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: gradient-shift 6s linear infinite;
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
 }
 
 .gallery-header p {
