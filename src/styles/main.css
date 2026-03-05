@@ -196,6 +196,7 @@ body {
   justify-content: center;
   overflow: hidden;
   padding: 1rem;
+  touch-action: none;
 }
 
 .art-canvas-container canvas {

@@ -61,16 +61,35 @@ export class Mandelbrot extends ArtAlgorithm {
       this.render(p, params);
     };
 
+    let renderTimeout = null;
+    let isGesturing = false;
+
+    const scheduleRender = () => {
+      clearTimeout(renderTimeout);
+      renderTimeout = setTimeout(() => {
+        this.render(p, params);
+        isGesturing = false;
+      }, 150);
+    };
+
+    const renderPreview = () => {
+      if (!isGesturing) {
+        isGesturing = true;
+      }
+      this.renderFast(p, params);
+      scheduleRender();
+    };
+
     const panBy = (dx, dy) => {
       const { viewW, viewH } = viewSize();
       this.centerX -= dx * (viewW / p.width);
       this.centerY -= dy * (viewH / p.height);
-      this.render(p, params);
+      renderPreview();
     };
 
     const zoomBy = (factor) => {
       this.zoom *= factor;
-      this.render(p, params);
+      renderPreview();
     };
 
     const canvasEl = p.canvas;
@@ -202,6 +221,63 @@ export class Mandelbrot extends ArtAlgorithm {
   }
 
   draw() {}
+
+  renderFast(p, params) {
+    const step = 4;
+    const { maxIter, colorSpeed, palette, julia, juliaR, juliaI } = params;
+    const w = p.width;
+    const h = p.height;
+    const fastIter = Math.min(maxIter, 60);
+
+    p.loadPixels();
+
+    const aspect = w / h;
+    const viewH = 3.5 / this.zoom;
+    const viewW = viewH * aspect;
+    const xMin = this.centerX - viewW / 2;
+    const yMin = this.centerY - viewH / 2;
+    const xScale = viewW / w;
+    const yScale = viewH / h;
+
+    for (let px = 0; px < w; px += step) {
+      for (let py = 0; py < h; py += step) {
+        const x0 = xMin + px * xScale;
+        const y0 = yMin + py * yScale;
+
+        let x, y, cx, cy;
+        if (julia) { x = x0; y = y0; cx = juliaR; cy = juliaI; }
+        else { x = 0; y = 0; cx = x0; cy = y0; }
+
+        let iter = 0, xx = x * x, yy = y * y;
+        while (xx + yy <= 4 && iter < fastIter) {
+          y = 2 * x * y + cy;
+          x = xx - yy + cx;
+          xx = x * x; yy = y * y;
+          iter++;
+        }
+
+        let r, g, b;
+        if (iter === fastIter) { r = 0; g = 0; b = 0; }
+        else {
+          const smooth = iter + 1 - Math.log(Math.log(Math.sqrt(xx + yy))) / Math.log(2);
+          const t = (smooth * colorSpeed) % 256;
+          [r, g, b] = this.getPaletteColor(palette, t / 256);
+        }
+
+        for (let sx = 0; sx < step && px + sx < w; sx++) {
+          for (let sy = 0; sy < step && py + sy < h; sy++) {
+            const idx = 4 * ((py + sy) * w + (px + sx));
+            p.pixels[idx] = r;
+            p.pixels[idx + 1] = g;
+            p.pixels[idx + 2] = b;
+            p.pixels[idx + 3] = 255;
+          }
+        }
+      }
+    }
+
+    p.updatePixels();
+  }
 
   render(p, params) {
     const { maxIter, colorSpeed, palette, julia, juliaR, juliaI } = params;
