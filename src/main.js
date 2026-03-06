@@ -230,7 +230,7 @@ function showArtView(slug, queryStr) {
   const sidebarToggle = document.createElement('button');
   sidebarToggle.className = 'btn btn-icon btn-sidebar-toggle';
   sidebarToggle.title = 'Toggle Controls';
-  sidebarToggle.textContent = '☰';
+  sidebarToggle.textContent = '⚙️';
   sidebarToggle.addEventListener('click', () => {
     view.classList.toggle('sidebar-open');
     sidebarOpen = view.classList.contains('sidebar-open');
