@@ -685,13 +685,26 @@ select.control-select:focus {
   height: 40px;
   font-size: 1.3rem;
   font-weight: 700;
-  background: rgba(26, 26, 26, 0.85);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1a1a1a;
   backdrop-filter: blur(4px);
   border-color: var(--border-hover);
 }
 
 .zoom-btn:hover {
-  background: rgba(40, 40, 40, 0.9);
+  background: rgba(255, 255, 255, 0.98);
+  color: #1a1a1a;
+}
+
+[data-theme="dark"] .zoom-btn {
+  background: rgba(26, 26, 26, 0.9);
+  color: #e8e8e8;
+  border-color: var(--border-hover);
+}
+
+[data-theme="dark"] .zoom-btn:hover {
+  background: rgba(45, 45, 45, 0.95);
+  color: #e8e8e8;
 }
 
 @media (max-width: 600px) {
