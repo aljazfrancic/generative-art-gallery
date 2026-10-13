@@ -11,7 +11,7 @@ An interactive gallery of 13 generative art algorithms, drawn in real time in yo
 - **13 algorithms**, all animated live (the Mandelbrot set is yours to explore instead)
 - **Live parameters**: sliders, colors, toggles and menus apply as you change them
 - **Randomize** for a surprise, **Defaults** to get back to the start
-- **Auto-restart**: pieces that finish (a closed spirograph, a packed canvas, a settled Game of Life, a solved maze, a stabilized reaction) hold for a few seconds, then start afresh. Switch it off to keep the result
+- **Auto-restart**: pieces that finish (a closed spirograph, a packed canvas, a settled Game of Life, a solved maze, a stabilized reaction) hold for a few seconds, then start afresh. Switch it off to keep the result. On the gallery page the previews loop sooner: circle packing and reaction-diffusion start over within 10 seconds
 - **Save PNG** at full resolution and **record 5-second videos** (WebM or MP4, depending on the browser)
 - **Shareable links**: the URL carries every parameter you changed. Values in links are validated, so a bad one can't freeze anyone's tab
 - **Light and dark themes**: follows your system, with a sun/moon switch to override it; canvas backgrounds follow along
@@ -61,11 +61,13 @@ The gallery is built to stay smooth on old laptops and budget phones:
 - **One loop for all thumbnails.** Thumbnails are drawn from a single animation loop with a time budget per frame and a 30 fps cap, so a slow device gets slower thumbnails rather than janky scrolling. Thumbnails off screen don't draw, and the gallery is kept while you look at an artwork, so going back is instant.
 - **Capped, adaptive resolution.** Canvases render at up to 2× pixel density (1× on low-end devices), and an artwork that drops below about 28 fps steps down to 1.5×, then 1×.
 - **Batched drawing.** Particles, flow lines, branches and terrain edges are drawn as a few batched paths instead of thousands of separate calls. Pixel effects are computed on a coarse grid with typed arrays and scaled up by the GPU.
-- **Work in time slices.** The Mandelbrot set renders progressively (a quick preview, then full resolution a few rows per frame) and reaction-diffusion caps its iterations per frame by time, so the page stays responsive.
+- **Reaction-diffusion on the GPU.** The Gray-Scott simulation runs in WebGL2 shaders, at about a cell per pixel on gallery cards and up to 300,000 cells full screen, and is drawn at the canvas' full resolution. If frames slow down it runs fewer iterations per frame; phones and low-end devices get a coarser grid. Where WebGL2 float render targets aren't available, it runs on the CPU instead.
+- **Work in time slices.** The Mandelbrot set renders progressively (a quick preview, then full resolution a few rows per frame) and reaction-diffusion on the CPU caps its iterations per frame by time, so the page stays responsive.
 
 ## Tech stack
 
 - **[p5.js](https://p5js.org/) 2**: canvas rendering in instance mode, modular build
+- **WebGL2**: the reaction-diffusion simulation (with a CPU fallback)
 - **Vanilla JavaScript**: ES modules, no framework
 - **[Vite](https://vite.dev/) 8**: dev server and production build
 - **CSS**: custom properties for both themes, no CSS framework
@@ -128,7 +130,8 @@ src/
 ├── icons.js             # Inline SVG icons
 ├── lib/
 │   ├── p5.js            # p5.js 2 assembled from the modules the gallery uses
-│   └── color.js         # Fast color helpers for hot loops
+│   ├── color.js         # Fast color helpers for hot loops
+│   └── gray-scott-gl.js # Reaction-diffusion on the GPU (WebGL2)
 ├── styles/
 │   └── main.css         # All styling: themes, layout, components
 └── algorithms/
@@ -213,6 +216,7 @@ The gallery and art views pick up the new algorithm automatically. A few things 
 - A `bgColor` (or `deadColor` / `pathColor`) control with a dark default follows the light and dark themes automatically.
 - `reset(p, params)` clears the canvas and calls `setup()` by default; `resize()` runs after the canvas changes size, and `onParamChange(p, params, key)` lets you react to a control, for example by restarting when a size changes.
 - For a finite piece, set `meta.finite` and return `true` from `isComplete()` once it's done: the gallery and the art view hold the last frame for a few seconds, then call `reset()`.
+- `this.interactive` is `false` for gallery previews. Use it to frame a preview for its card or keep its loop short: the fractal tree zooms in to fill its card, and circle packing and reaction-diffusion finish within 10 seconds there.
 - The p5 build includes its core, shape, color and math modules. If you need more (say `p5/image` for `filter()`), register the addon in `src/lib/p5.js`.
 - For heavy loops, draw through `p.drawingContext` in batches or compute into typed arrays; the existing algorithms show both.
 
