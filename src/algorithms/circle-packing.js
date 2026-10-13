@@ -1,19 +1,31 @@
 import { ArtAlgorithm } from './base.js';
+import { hexToRgb, hsvToRgb, mixRgb, rgbCss } from '../lib/color.js';
+
+// Placement stops once fewer than 0.4% of the recent attempts find room (or a cap is hit).
+const WINDOW = 1500;
+const MIN_SUCCESS_RATE = 0.004;
+const MAX_CIRCLES = 6000;
+const MAX_MS = 60_000;
 
 export class CirclePacking extends ArtAlgorithm {
   static meta = {
     name: 'Circle Packing',
     description:
-      'Progressively fills the canvas with non-overlapping circles that grow until they touch edges or each other.',
+      'Circles appear at random and grow until they touch a neighbor or the edge, packing the canvas before starting over.',
     slug: 'circle-packing',
     tags: ['geometry'],
+    finite: true,
   };
 
-  circles = [];
-  consecutiveFailures = 0;
-  placementStopped = false;
-  FAILURE_THRESHOLD = 1000;
-  doneFrames = 0;
+  circles = []; // { x, y, r, style }
+  growing = []; // circles still growing
+  grid = null; // spatial hash: circle lists per cell, so overlap checks only look nearby
+  recent = new Uint8Array(WINDOW);
+  recentAt = 0;
+  recentHits = 0;
+  attempts = 0;
+  placing = true;
+  elapsed = 0;
 
   getControls() {
     return [
@@ -41,132 +53,132 @@ export class CirclePacking extends ArtAlgorithm {
 
   setup(p, params) {
     this.circles = [];
-    this.consecutiveFailures = 0;
-    this.placementStopped = false;
-    this.doneFrames = 0;
+    this.growing = [];
+    const size = 2 * params.maxRadius + params.minGap + 1;
+    const cols = Math.ceil(p.width / size);
+    const rows = Math.ceil(p.height / size);
+    this.grid = { size, cols, rows, cells: Array.from({ length: cols * rows }, () => []) };
+    this.recent.fill(0);
+    this.recentAt = 0;
+    this.recentHits = 0;
+    this.attempts = 0;
+    this.placing = true;
+    this.elapsed = 0;
     p.background(params.bgColor);
   }
 
-  getColorForCircle(p, params, x, y, radius) {
-    const { colorMode, color1, color2 } = params;
-    const w = p.width;
-    const h = p.height;
-    const cx = w / 2;
-    const cy = h / 2;
-
-    if (colorMode === 'random') {
-      p.colorMode(p.HSB, 360, 100, 100);
-      const col = p.color(p.random(360), 70, 90);
-      p.colorMode(p.RGB, 255);
-      return col;
-    }
-    if (colorMode === 'palette') {
-      const t = (x / w + y / h) / 2;
-      return p.lerpColor(p.color(color1), p.color(color2), p.constrain(t, 0, 1));
-    }
-    // gradient: based on distance from center
-    const dist = p.dist(x, y, cx, cy);
-    const maxDist = p.dist(0, 0, cx, cy);
-    const t = p.constrain(dist / maxDist, 0, 1);
-    return p.lerpColor(p.color(color1), p.color(color2), t);
+  reset(p, params) {
+    this.setup(p, params);
   }
 
-  overlapsWithExisting(p, x, y, radius, minGap, excludeIndex = -1) {
-    for (let i = 0; i < this.circles.length; i++) {
-      if (i === excludeIndex) continue;
-      const c = this.circles[i];
-      const dist = p.dist(x, y, c.x, c.y);
-      if (dist < radius + c.radius + minGap) {
-        return true;
+  isComplete() {
+    return !this.placing && this.growing.length === 0;
+  }
+
+  colorFor(p, params, x, y) {
+    const { colorMode } = params;
+    if (colorMode === 'random') return rgbCss(hsvToRgb(Math.random() * 360, 0.7, 0.9));
+    const c1 = hexToRgb(params.color1);
+    const c2 = hexToRgb(params.color2);
+    if (colorMode === 'palette') {
+      return rgbCss(mixRgb(c1, c2, Math.min(1, Math.max(0, (x / p.width + y / p.height) / 2))));
+    }
+    const cx = p.width / 2;
+    const cy = p.height / 2;
+    return rgbCss(mixRgb(c1, c2, Math.min(1, Math.hypot(x - cx, y - cy) / Math.hypot(cx, cy))));
+  }
+
+  /** True if a circle at (x, y) with radius r would come closer than `gap` to any other circle. */
+  overlaps(x, y, r, gap, self) {
+    const { size, cols, rows, cells } = this.grid;
+    const gx = Math.floor(x / size);
+    const gy = Math.floor(y / size);
+    for (let cy = Math.max(0, gy - 1); cy <= Math.min(rows - 1, gy + 1); cy++) {
+      for (let cx = Math.max(0, gx - 1); cx <= Math.min(cols - 1, gx + 1); cx++) {
+        for (const c of cells[cy * cols + cx]) {
+          if (c === self) continue;
+          const limit = r + c.r + gap;
+          const dx = x - c.x;
+          const dy = y - c.y;
+          if (dx * dx + dy * dy < limit * limit) return true;
+        }
       }
     }
     return false;
   }
 
-  canPlaceAt(p, x, y, minRadius, maxRadius, minGap) {
-    if (x - minRadius - minGap < 0 || x + minRadius + minGap > p.width) return false;
-    if (y - minRadius - minGap < 0 || y + minRadius + minGap > p.height) return false;
-    if (this.overlapsWithExisting(p, x, y, minRadius, minGap)) return false;
-    return true;
+  outside(p, x, y, r, gap) {
+    return x - r - gap < 0 || x + r + gap > p.width || y - r - gap < 0 || y + r + gap > p.height;
   }
 
   draw(p, params) {
-    const { maxRadius, growSpeed, attemptsPerFrame, minGap, colorMode, color1, color2, bgColor, outlined } = params;
+    const { maxRadius, growSpeed, minGap } = params;
+    this.elapsed += p.deltaTime;
 
-    if (!this.placementStopped) {
-      let successCount = 0;
-      for (let i = 0; i < attemptsPerFrame; i++) {
-        if (this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
-          this.placementStopped = true;
-          break;
+    if (this.placing) {
+      for (let i = 0; i < params.attemptsPerFrame; i++) {
+        const x = Math.random() * p.width;
+        const y = Math.random() * p.height;
+        const ok = !this.outside(p, x, y, 1, minGap) && !this.overlaps(x, y, 1, minGap, null);
+        if (ok) {
+          const c = { x, y, r: 1, style: this.colorFor(p, params, x, y) };
+          this.circles.push(c);
+          this.growing.push(c);
+          const { size, cols } = this.grid;
+          this.grid.cells[Math.floor(y / size) * cols + Math.floor(x / size)].push(c);
         }
-        const x = p.random(p.width);
-        const y = p.random(p.height);
-        if (this.canPlaceAt(p, x, y, 1, maxRadius, minGap)) {
-          const color = this.getColorForCircle(p, params, x, y, 1);
-          this.circles.push({ x, y, radius: 1, color, growing: true });
-          this.consecutiveFailures = 0;
-          successCount++;
-        } else {
-          this.consecutiveFailures++;
-        }
+        this.recentHits += (ok ? 1 : 0) - this.recent[this.recentAt];
+        this.recent[this.recentAt] = ok ? 1 : 0;
+        this.recentAt = (this.recentAt + 1) % WINDOW;
+        this.attempts++;
       }
+      const full = this.attempts >= WINDOW && this.recentHits / WINDOW < MIN_SUCCESS_RATE;
+      if (full || this.circles.length >= MAX_CIRCLES || this.elapsed > MAX_MS) this.placing = false;
     }
 
-    for (let i = 0; i < this.circles.length; i++) {
-      const c = this.circles[i];
-      if (c.growing) {
-        c.radius += growSpeed;
-        if (c.radius >= maxRadius) {
-          c.radius = maxRadius;
-          c.growing = false;
-        } else if (
-          c.x - c.radius - minGap < 0 ||
-          c.x + c.radius + minGap > p.width ||
-          c.y - c.radius - minGap < 0 ||
-          c.y + c.radius + minGap > p.height
-        ) {
-          c.radius -= growSpeed;
-          c.growing = false;
-        } else if (this.overlapsWithExisting(p, c.x, c.y, c.radius, minGap, i)) {
-          c.radius -= growSpeed;
-          c.growing = false;
-        }
+    // Grow, then draw only what changed: a bigger circle simply covers its smaller self.
+    const ctx = p.drawingContext;
+    const stillGrowing = [];
+    for (const c of this.growing) {
+      const r = Math.min(maxRadius, c.r + growSpeed);
+      if (this.outside(p, c.x, c.y, r, minGap) || this.overlaps(c.x, c.y, r, minGap, c)) {
+        // Can't grow any further.
+      } else {
+        c.r = r;
+        if (r < maxRadius) stillGrowing.push(c);
       }
+      this.drawCircle(ctx, params, c);
     }
+    this.growing = stillGrowing;
+  }
 
-    if (this.placementStopped && this.circles.every(c => !c.growing)) {
-      this.doneFrames++;
-      if (this.doneFrames >= 60) {
-        this.setup(p, params);
-        return;
-      }
-    }
-
-    p.background(bgColor);
-
-    if (outlined) {
-      p.noFill();
-      p.strokeWeight(1);
-      for (const c of this.circles) {
-        p.stroke(c.color);
-        p.ellipse(c.x, c.y, c.radius * 2, c.radius * 2);
-      }
-      p.noStroke();
+  drawCircle(ctx, params, c) {
+    ctx.beginPath();
+    if (params.outlined) {
+      // Clear the previous, smaller ring first.
+      ctx.arc(c.x, c.y, c.r + 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = params.bgColor;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, Math.max(0.5, c.r), 0, Math.PI * 2);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = c.style;
+      ctx.stroke();
     } else {
-      p.noStroke();
-      for (const c of this.circles) {
-        p.fill(c.color);
-        p.ellipse(c.x, c.y, c.radius * 2, c.radius * 2);
-      }
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fillStyle = c.style;
+      ctx.fill();
     }
   }
 
-  reset(p, params) {
-    this.circles = [];
-    this.consecutiveFailures = 0;
-    this.placementStopped = false;
+  redrawAll(p, params) {
     p.background(params.bgColor);
-    this.setup(p, params);
+    for (const c of this.circles) this.drawCircle(p.drawingContext, params, c);
+  }
+
+  onParamChange(p, params, key) {
+    // The spatial grid is sized for the radius and gap.
+    if (key === 'maxRadius' || key === 'minGap') this.setup(p, params);
+    else if (key === 'outlined' || key === 'bgColor') this.redrawAll(p, params);
   }
 }

@@ -2,16 +2,51 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Generative Art Gallery</title>
+  <meta name="description" content="Thirteen generative art algorithms, from flow fields and fractals to cellular automata and reaction-diffusion, drawn in real time with p5.js. Shape them with live parameters, then save a PNG or record a video." />
+  <meta name="author" content="Aljaž Frančič" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0b0b0f" />
+  <link rel="canonical" href="https://aljazfrancic.github.io/generative-art-gallery/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Generative Art Gallery" />
+  <meta property="og:title" content="Generative Art Gallery" />
+  <meta property="og:description" content="Thirteen generative art algorithms drawn in real time in your browser. Shape them with live parameters, then save a PNG or record a video." />
+  <meta property="og:url" content="https://aljazfrancic.github.io/generative-art-gallery/" />
+  <meta property="og:image" content="https://aljazfrancic.github.io/generative-art-gallery/og-image.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="A grid of generative artworks: flow fields, a fractal tree, a Mandelbrot set, Voronoi cells and more." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <script>
+    // Apply the saved (or system) theme before the first paint; src/theme.js takes over from there.
+    // The key is "gallery-theme": every site under aljazfrancic.github.io shares one localStorage.
+    (function () {
+      var theme;
+      try { theme = localStorage.getItem('gallery-theme'); } catch (e) {}
+      if (theme !== 'light' && theme !== 'dark') {
+        theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === 'light' ? '#f6f6f8' : '#0b0b0f';
+    })();
+  </script>
+  <link rel="icon" href="/favicon.ico" sizes="32x32" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <!-- Fonts load without blocking the first paint; the system fallbacks show until they arrive. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400..700&display=swap" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400..700&display=swap" /></noscript>
+  <link rel="stylesheet" href="/src/styles/main.css" />
 </head>
 <body>
   <div id="app"></div>
+  <noscript>The gallery draws its artworks with JavaScript; please enable it to see them.</noscript>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

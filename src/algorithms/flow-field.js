@@ -1,4 +1,9 @@
 import { ArtAlgorithm } from './base.js';
+import { hexToRgb, mixRgb, rgbCss } from '../lib/color.js';
+
+const MAX_PARTICLES = 5000;
+const CELL = 20; // flow-field grid spacing in px
+const BATCHES = 12; // particles are stroked in this many colour batches instead of one by one
 
 export class FlowField extends ArtAlgorithm {
   static meta = {
@@ -9,10 +14,17 @@ export class FlowField extends ArtAlgorithm {
     tags: ['noise', 'particles'],
   };
 
-  particles = [];
-  flowField = [];
+  // Particle state in flat typed arrays: no per-particle objects to allocate or collect.
+  x = new Float32Array(MAX_PARTICLES);
+  y = new Float32Array(MAX_PARTICLES);
+  age = new Uint16Array(MAX_PARTICLES);
+  life = new Uint16Array(MAX_PARTICLES);
   cols = 0;
   rows = 0;
+  fieldCos = null;
+  fieldSin = null;
+  zOff = 0;
+  frame = 0;
 
   getControls() {
     return [
@@ -28,89 +40,78 @@ export class FlowField extends ArtAlgorithm {
   }
 
   setup(p, params) {
-    const scl = 20;
-    this.cols = Math.ceil(p.width / scl);
-    this.rows = Math.ceil(p.height / scl);
-    this.scl = scl;
-    this.zOff = 0;
-    this.flowField = new Array(this.cols * this.rows);
-    this.initParticles(p, params);
+    this.cols = Math.ceil(p.width / CELL) + 1;
+    this.rows = Math.ceil(p.height / CELL) + 1;
+    this.fieldCos = new Float32Array(this.cols * this.rows);
+    this.fieldSin = new Float32Array(this.cols * this.rows);
+    // A random slice of noise space gives every run its own currents.
+    this.zOff = Math.random() * 1000;
+    for (let i = 0; i < MAX_PARTICLES; i++) this.spawn(p, i, true);
     p.background(params.bgColor);
-  }
-
-  initParticles(p, params) {
-    this.particles = [];
-    const count = params.particleCount;
-    for (let i = 0; i < count; i++) {
-      this.particles.push({
-        x: Math.random() * p.width,
-        y: Math.random() * p.height,
-        prevX: 0,
-        prevY: 0,
-        hue: Math.random(),
-      });
-    }
-  }
-
-  draw(p, params) {
-    p.background(p.red(p.color(params.bgColor)), p.green(p.color(params.bgColor)), p.blue(p.color(params.bgColor)), params.trailFade);
-
-    const { noiseScale, speed, noiseEvolution } = params;
-
-    for (let y = 0; y < this.rows; y++) {
-      for (let x = 0; x < this.cols; x++) {
-        const angle = p.noise(x * noiseScale * 100, y * noiseScale * 100, this.zOff) * p.TWO_PI * 2;
-        this.flowField[x + y * this.cols] = angle;
-      }
-    }
-
-    const c1 = p.color(params.color1);
-    const c2 = p.color(params.color2);
-
-    for (const pt of this.particles) {
-      const col = Math.floor(pt.x / this.scl);
-      const row = Math.floor(pt.y / this.scl);
-
-      if (col >= 0 && col < this.cols && row >= 0 && row < this.rows) {
-        const angle = this.flowField[col + row * this.cols];
-        pt.prevX = pt.x;
-        pt.prevY = pt.y;
-        pt.x += Math.cos(angle) * speed;
-        pt.y += Math.sin(angle) * speed;
-      }
-
-      if (pt.x < 0 || pt.x > p.width || pt.y < 0 || pt.y > p.height) {
-        pt.x = Math.random() * p.width;
-        pt.y = Math.random() * p.height;
-        pt.prevX = pt.x;
-        pt.prevY = pt.y;
-      }
-
-      const lineColor = p.lerpColor(c1, c2, pt.hue);
-      p.stroke(p.red(lineColor), p.green(lineColor), p.blue(lineColor), 60);
-      p.strokeWeight(1);
-      p.line(pt.prevX, pt.prevY, pt.x, pt.y);
-    }
-
-    this.zOff += noiseEvolution;
-
-    while (this.particles.length < params.particleCount) {
-      this.particles.push({
-        x: Math.random() * p.width,
-        y: Math.random() * p.height,
-        prevX: 0,
-        prevY: 0,
-        hue: Math.random(),
-      });
-    }
-    if (this.particles.length > params.particleCount) {
-      this.particles.length = params.particleCount;
-    }
   }
 
   reset(p, params) {
-    p.background(params.bgColor);
-    this.zOff = 0;
-    this.initParticles(p, params);
+    this.setup(p, params);
+  }
+
+  // Particles live a limited time, so they don't all end up stuck in the field's sinks.
+  spawn(p, i, randomAge) {
+    this.x[i] = Math.random() * p.width;
+    this.y[i] = Math.random() * p.height;
+    this.life[i] = 80 + Math.floor(Math.random() * 320);
+    this.age[i] = randomAge ? Math.floor(Math.random() * this.life[i]) : 0;
+  }
+
+  draw(p, params) {
+    const ctx = p.drawingContext;
+    const w = p.width;
+    const h = p.height;
+    // Fading by a few percent every frame stalls short of the background (8-bit rounding) and
+    // leaves grey ghost trails. Fading every few frames by an equivalent larger step doesn't.
+    const perFrame = params.trailFade / 255;
+    const every = Math.min(4, Math.max(1, Math.ceil(Math.log(1 - 0.08) / Math.log(1 - perFrame))));
+    if (++this.frame % every === 0) {
+      ctx.fillStyle = rgbCss(hexToRgb(params.bgColor), 1 - (1 - perFrame) ** every);
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    const ns = params.noiseScale * 100;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const angle = p.noise(c * ns, r * ns, this.zOff) * Math.PI * 4;
+        const i = r * this.cols + c;
+        this.fieldCos[i] = Math.cos(angle);
+        this.fieldSin[i] = Math.sin(angle);
+      }
+    }
+    this.zOff += params.noiseEvolution;
+
+    const count = Math.min(params.particleCount, MAX_PARTICLES);
+    const c1 = hexToRgb(params.color1);
+    const c2 = hexToRgb(params.color2);
+    const { speed } = params;
+    const { x, y, age, life, fieldCos, fieldSin, cols } = this;
+    ctx.lineWidth = 1;
+    for (let b = 0; b < BATCHES; b++) {
+      ctx.strokeStyle = rgbCss(mixRgb(c1, c2, (b + 0.5) / BATCHES), 60 / 255);
+      ctx.beginPath();
+      const end = Math.floor(((b + 1) * count) / BATCHES);
+      for (let i = Math.floor((b * count) / BATCHES); i < end; i++) {
+        const px = x[i];
+        const py = y[i];
+        const cell = ((py / CELL) | 0) * cols + ((px / CELL) | 0);
+        const nx = px + fieldCos[cell] * speed;
+        const ny = py + fieldSin[cell] * speed;
+        if (nx < 0 || nx >= w || ny < 0 || ny >= h || ++age[i] > life[i]) {
+          this.spawn(p, i, false);
+          continue;
+        }
+        ctx.moveTo(px, py);
+        ctx.lineTo(nx, ny);
+        x[i] = nx;
+        y[i] = ny;
+      }
+      ctx.stroke();
+    }
   }
 }

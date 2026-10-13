@@ -1,21 +1,42 @@
 import { ArtAlgorithm } from './base.js';
+import { icon } from '../icons.js';
+import { packRgb } from '../lib/color.js';
+
+const LUT_SIZE = 1024;
+const BAILOUT = 256; // escape radius²: a large radius makes the colour bands blend smoothly
+const MAX_ZOOM = 2e13; // past this, double precision turns the image into blocks
+const PREVIEW_SAMPLES = 60_000;
+const SETTLE_MS = 140; // full resolution starts once a gesture has paused this long
+
+const clamp255 = (v) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
+
+// At zoom 1 the whole set fits on screen: this much of the complex plane, whichever side is tighter.
+const FIT = { mandelbrot: { x: -0.65, w: 3.3, h: 2.8 }, julia: { x: 0, w: 3.6, h: 2.6 } };
 
 export class Mandelbrot extends ArtAlgorithm {
   static meta = {
     name: 'Mandelbrot Set',
     description:
-      'Explore the infinite complexity of the Mandelbrot and Julia fractals. Click to zoom in, right-click to zoom out.',
+      'Explore the Mandelbrot and Julia sets: click or pinch to zoom, drag to pan, scroll to zoom toward the pointer.',
     slug: 'mandelbrot',
     tags: ['fractal', 'math'],
+    animated: false,
   };
 
   centerX = -0.5;
   centerY = 0;
   zoom = 1;
-  needsRedraw = true;
-  isJulia = false;
-  juliaR = -0.7;
-  juliaI = 0.27;
+  params = null;
+  // Rendering happens a slice at a time inside draw(): a quick low-resolution preview first,
+  // then full resolution row by row, so the page stays responsive even on slow devices.
+  job = null; // { stage: 'preview' | 'wait' | 'full', y }
+  lastGesture = 0;
+  image = null;
+  pixels = null;
+  preview = null;
+  lut = null;
+  lutKey = '';
+  ui = null;
 
   getControls() {
     return [
@@ -40,352 +61,321 @@ export class Mandelbrot extends ArtAlgorithm {
   }
 
   setup(p, params) {
-    this.centerX = -0.5;
-    this.centerY = 0;
-    this.zoom = 1;
-    this.needsRedraw = true;
-    p.pixelDensity(1);
-    p.noLoop();
-    this.render(p, params);
-
-    const viewSize = () => {
-      const aspect = p.width / p.height;
-      const viewH = 3.5 / this.zoom;
-      return { viewW: viewH * aspect, viewH };
-    };
-
-    const zoomAt = (px, py, zoomIn) => {
-      const { viewW, viewH } = viewSize();
-      this.centerX += (px - p.width / 2) * (viewW / p.width);
-      this.centerY += (py - p.height / 2) * (viewH / p.height);
-      this.zoom *= zoomIn ? 2.5 : 0.5;
-      this.render(p, params);
-    };
-
-    let renderTimeout = null;
-    let isGesturing = false;
-
-    const scheduleRender = () => {
-      clearTimeout(renderTimeout);
-      renderTimeout = setTimeout(() => {
-        this.render(p, params);
-        isGesturing = false;
-      }, 150);
-    };
-
-    const renderPreview = () => {
-      if (!isGesturing) {
-        isGesturing = true;
-      }
-      this.renderFast(p, params);
-      scheduleRender();
-    };
-
-    const panBy = (dx, dy) => {
-      const { viewW, viewH } = viewSize();
-      this.centerX -= dx * (viewW / p.width);
-      this.centerY -= dy * (viewH / p.height);
-      renderPreview();
-    };
-
-    const zoomBy = (factor) => {
-      this.zoom *= factor;
-      renderPreview();
-    };
-
-    const canvasEl = p.canvas;
-    const container = canvasEl.parentElement;
-    const isThumbnail = container && container.classList.contains('gallery-card-canvas');
-
-    if (isThumbnail) return;
-
-    const sidebarIsOpen = () => {
-      const artView = canvasEl.closest('.art-view');
-      return artView && artView.classList.contains('sidebar-open');
-    };
-
-    // Desktop: click to zoom, drag to pan
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let hasDragged = false;
-
-    canvasEl.addEventListener('mousedown', (e) => {
-      if (sidebarIsOpen()) return;
-      isDragging = true;
-      hasDragged = false;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      const dy = e.clientY - dragStartY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged = true;
-      if (hasDragged) {
-        panBy(dx, dy);
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
-      }
-    });
-
-    window.addEventListener('mouseup', (e) => {
-      if (!isDragging) return;
-      isDragging = false;
-      if (!hasDragged && !sidebarIsOpen()) {
-        const rect = canvasEl.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
-        if (px >= 0 && px <= p.width && py >= 0 && py <= p.height) {
-          zoomAt(px, py, e.button !== 2);
-        }
-      }
-    });
-
-    // Mouse wheel zoom
-    canvasEl.addEventListener('wheel', (e) => {
-      if (sidebarIsOpen()) return;
-      e.preventDefault();
-      zoomBy(e.deltaY < 0 ? 1.3 : 0.77);
-    }, { passive: false });
-
-    // Touch: one finger = pan, two fingers = pinch zoom
-    let lastTouches = null;
-
-    canvasEl.addEventListener('touchstart', (e) => {
-      if (sidebarIsOpen()) return;
-      e.preventDefault();
-      lastTouches = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }));
-    }, { passive: false });
-
-    canvasEl.addEventListener('touchmove', (e) => {
-      if (sidebarIsOpen() || !lastTouches) return;
-      e.preventDefault();
-      const current = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }));
-
-      if (current.length === 1 && lastTouches.length === 1) {
-        const dx = current[0].x - lastTouches[0].x;
-        const dy = current[0].y - lastTouches[0].y;
-        panBy(dx, dy);
-      } else if (current.length >= 2 && lastTouches.length >= 2) {
-        const prevDist = Math.hypot(lastTouches[1].x - lastTouches[0].x, lastTouches[1].y - lastTouches[0].y);
-        const currDist = Math.hypot(current[1].x - current[0].x, current[1].y - current[0].y);
-        if (prevDist > 0) {
-          zoomBy(currDist / prevDist);
-        }
-
-        const prevMidX = (lastTouches[0].x + lastTouches[1].x) / 2;
-        const prevMidY = (lastTouches[0].y + lastTouches[1].y) / 2;
-        const currMidX = (current[0].x + current[1].x) / 2;
-        const currMidY = (current[0].y + current[1].y) / 2;
-        panBy(currMidX - prevMidX, currMidY - prevMidY);
-      }
-
-      lastTouches = current;
-    }, { passive: false });
-
-    canvasEl.addEventListener('touchend', (e) => {
-      if (e.touches.length === 0) {
-        lastTouches = null;
-      } else {
-        lastTouches = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }));
-      }
-    });
-
-    // +/- zoom buttons
-    if (container && !container.querySelector('.zoom-controls')) {
-      const zoomControls = document.createElement('div');
-      zoomControls.className = 'zoom-controls';
-
-      const zoomInBtn = document.createElement('button');
-      zoomInBtn.className = 'btn btn-icon zoom-btn';
-      zoomInBtn.textContent = '+';
-      zoomInBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        zoomBy(2.5);
-      });
-
-      const zoomOutBtn = document.createElement('button');
-      zoomOutBtn.className = 'btn btn-icon zoom-btn';
-      zoomOutBtn.textContent = '−';
-      zoomOutBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        zoomBy(0.4);
-      });
-
-      zoomControls.appendChild(zoomInBtn);
-      zoomControls.appendChild(zoomOutBtn);
-      container.style.position = 'relative';
-      container.appendChild(zoomControls);
-    }
-  }
-
-  draw() {}
-
-  renderFast(p, params) {
-    const step = 4;
-    const { maxIter, colorSpeed, palette, julia, juliaR, juliaI } = params;
-    const w = p.width;
-    const h = p.height;
-    const fastIter = Math.min(maxIter, 60);
-
-    p.loadPixels();
-
-    const aspect = w / h;
-    const viewH = 3.5 / this.zoom;
-    const viewW = viewH * aspect;
-    const xMin = this.centerX - viewW / 2;
-    const yMin = this.centerY - viewH / 2;
-    const xScale = viewW / w;
-    const yScale = viewH / h;
-
-    for (let px = 0; px < w; px += step) {
-      for (let py = 0; py < h; py += step) {
-        const x0 = xMin + px * xScale;
-        const y0 = yMin + py * yScale;
-
-        let x, y, cx, cy;
-        if (julia) { x = x0; y = y0; cx = juliaR; cy = juliaI; }
-        else { x = 0; y = 0; cx = x0; cy = y0; }
-
-        let iter = 0, xx = x * x, yy = y * y;
-        while (xx + yy <= 4 && iter < fastIter) {
-          y = 2 * x * y + cy;
-          x = xx - yy + cx;
-          xx = x * x; yy = y * y;
-          iter++;
-        }
-
-        let r, g, b;
-        if (iter === fastIter) { r = 0; g = 0; b = 0; }
-        else {
-          const smooth = iter + 1 - Math.log(Math.log(Math.sqrt(xx + yy))) / Math.log(2);
-          const t = (smooth * colorSpeed) % 256;
-          [r, g, b] = this.getPaletteColor(palette, t / 256);
-        }
-
-        for (let sx = 0; sx < step && px + sx < w; sx++) {
-          for (let sy = 0; sy < step && py + sy < h; sy++) {
-            const idx = 4 * ((py + sy) * w + (px + sx));
-            p.pixels[idx] = r;
-            p.pixels[idx + 1] = g;
-            p.pixels[idx + 2] = b;
-            p.pixels[idx + 3] = 255;
-          }
-        }
-      }
-    }
-
-    p.updatePixels();
-  }
-
-  render(p, params) {
-    const { maxIter, colorSpeed, palette, julia, juliaR, juliaI } = params;
-    const w = p.width;
-    const h = p.height;
-
-    p.loadPixels();
-
-    const aspect = w / h;
-    const viewH = 3.5 / this.zoom;
-    const viewW = viewH * aspect;
-    const xMin = this.centerX - viewW / 2;
-    const yMin = this.centerY - viewH / 2;
-    const xScale = viewW / w;
-    const yScale = viewH / h;
-
-    for (let px = 0; px < w; px++) {
-      for (let py = 0; py < h; py++) {
-        const x0 = xMin + px * xScale;
-        const y0 = yMin + py * yScale;
-
-        let x, y, cx, cy;
-        if (julia) {
-          x = x0;
-          y = y0;
-          cx = juliaR;
-          cy = juliaI;
-        } else {
-          x = 0;
-          y = 0;
-          cx = x0;
-          cy = y0;
-        }
-
-        let iter = 0;
-        let xx = x * x;
-        let yy = y * y;
-
-        while (xx + yy <= 4 && iter < maxIter) {
-          y = 2 * x * y + cy;
-          x = xx - yy + cx;
-          xx = x * x;
-          yy = y * y;
-          iter++;
-        }
-
-        const idx = 4 * (py * w + px);
-        if (iter === maxIter) {
-          p.pixels[idx] = 0;
-          p.pixels[idx + 1] = 0;
-          p.pixels[idx + 2] = 0;
-        } else {
-          const smooth = iter + 1 - Math.log(Math.log(Math.sqrt(xx + yy))) / Math.log(2);
-          const t = (smooth * colorSpeed) % 256;
-          const [r, g, b] = this.getPaletteColor(palette, t / 256);
-          p.pixels[idx] = r;
-          p.pixels[idx + 1] = g;
-          p.pixels[idx + 2] = b;
-        }
-        p.pixels[idx + 3] = 255;
-      }
-    }
-
-    p.updatePixels();
-  }
-
-  getPaletteColor(palette, t) {
-    switch (palette) {
-      case 'fire':
-        return [
-          Math.floor(Math.min(255, t * 3 * 255)),
-          Math.floor(Math.max(0, (t - 0.33) * 3 * 255)),
-          Math.floor(Math.max(0, (t - 0.66) * 3 * 255)),
-        ];
-      case 'ocean':
-        return [
-          Math.floor(9 * (1 - t) * t * t * t * 255),
-          Math.floor(15 * (1 - t) * (1 - t) * t * t * 255),
-          Math.floor(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255 + t * 150),
-        ];
-      case 'grayscale': {
-        const v = Math.floor(t * 255);
-        return [v, v, v];
-      }
-      case 'electric':
-      default:
-        return [
-          Math.floor((0.5 + 0.5 * Math.cos(Math.PI * 2 * (t + 0.0))) * 255),
-          Math.floor((0.5 + 0.5 * Math.cos(Math.PI * 2 * (t + 0.33))) * 255),
-          Math.floor((0.5 + 0.5 * Math.cos(Math.PI * 2 * (t + 0.67))) * 255),
-        ];
-    }
-  }
-
-  onParamChange(p, params, key) {
-    if (key === 'julia') {
-      this.centerX = params.julia ? 0 : -0.5;
-      this.centerY = 0;
-      this.zoom = 1;
-    }
-    this.render(p, params);
+    this.params = params;
+    this.resetView(params);
+    this.allocate(p);
+    if (this.interactive && !this.ui) this.attachUI(p);
+    this.invalidate();
   }
 
   reset(p, params) {
-    this.centerX = params.julia ? 0 : -0.5;
+    this.resetView(params);
+    this.invalidate();
+  }
+
+  /** A new canvas size keeps the current view. */
+  resize(p) {
+    this.allocate(p);
+    this.invalidate();
+  }
+
+  isIdle() {
+    return this.job === null;
+  }
+
+  resetView(params) {
+    this.centerX = FIT[params.julia ? 'julia' : 'mandelbrot'].x;
     this.centerY = 0;
     this.zoom = 1;
-    this.render(p, params);
   }
+
+  /** Complex-plane units per pixel of a w×h view (CSS or device pixels alike). */
+  unit(w, h) {
+    const fit = FIT[this.params?.julia ? 'julia' : 'mandelbrot'];
+    return Math.max(fit.w / w, fit.h / h) / this.zoom;
+  }
+
+  allocate(p) {
+    // Render at the canvas's full device resolution.
+    const W = p.canvas.width;
+    const H = p.canvas.height;
+    this.image = new ImageData(W, H);
+    this.pixels = new Uint32Array(this.image.data.buffer);
+    if (!this.preview) {
+      const canvas = document.createElement('canvas');
+      this.preview = { canvas, ctx: canvas.getContext('2d') };
+    }
+    const step = Math.max(2, Math.ceil(Math.sqrt((W * H) / PREVIEW_SAMPLES)));
+    const { canvas, ctx } = this.preview;
+    canvas.width = Math.ceil(W / step);
+    canvas.height = Math.ceil(H / step);
+    const image = ctx.createImageData(canvas.width, canvas.height);
+    Object.assign(this.preview, { step, image, pixels: new Uint32Array(image.data.buffer) });
+  }
+
+  invalidate(gesture = false) {
+    if (gesture) this.lastGesture = performance.now();
+    this.job = { stage: 'preview', y: 0 };
+    if (this.ui) this.ui.level.textContent = formatZoom(this.zoom);
+  }
+
+  draw(p, params) {
+    const job = this.job;
+    if (!job) return;
+    if (job.stage === 'preview') {
+      this.renderPreview(p, params);
+      job.stage = 'wait';
+    }
+    if (job.stage === 'wait') {
+      if (performance.now() - this.lastGesture < SETTLE_MS) return;
+      job.stage = 'full';
+    }
+
+    const { width: W, height: H } = this.image;
+    const rowsPerSlice = Math.max(1, Math.round(16384 / W));
+    const deadline = performance.now() + (this.interactive ? 12 : 6);
+    const y0 = job.y;
+    do {
+      const y1 = Math.min(H, job.y + rowsPerSlice);
+      this.renderRows(params, job.y, y1, this.pixels, W, W, H, 1, params.maxIter);
+      job.y = y1;
+    } while (job.y < H && performance.now() < deadline);
+    // putImageData works in device pixels and ignores the canvas transform.
+    p.drawingContext.putImageData(this.image, 0, 0, 0, y0, W, job.y - y0);
+    if (job.y >= H) this.job = null;
+  }
+
+  renderPreview(p, params) {
+    const { canvas, ctx, image, pixels, step } = this.preview;
+    this.renderRows(params, 0, canvas.height, pixels, canvas.width, this.image.width, this.image.height, step,
+      Math.min(params.maxIter, 100));
+    ctx.putImageData(image, 0, 0);
+    const main = p.drawingContext;
+    main.save();
+    main.setTransform(1, 0, 0, 1, 0, 0);
+    main.imageSmoothingEnabled = true;
+    main.drawImage(canvas, 0, 0, canvas.width * step, canvas.height * step);
+    main.restore();
+  }
+
+  /** Fills rows [y0, y1) of `out` (bw wide); each output pixel samples a step×step block of a W×H image. */
+  renderRows(params, y0, y1, out, bw, W, H, step, maxIter) {
+    const { colorSpeed, julia, juliaR, juliaI } = params;
+    const lut = this.palette(params);
+    const unit = this.unit(W, H); // complex-plane units per device pixel
+    const xMin = this.centerX - (W / 2) * unit;
+    const yMin = this.centerY - (H / 2) * unit;
+    const inside = 0xff000000;
+    const toLut = LUT_SIZE / 256;
+
+    for (let y = y0; y < y1; y++) {
+      const ci0 = yMin + (y + 0.5) * step * unit;
+      let o = y * bw;
+      for (let x = 0; x < bw; x++, o++) {
+        const cr0 = xMin + (x + 0.5) * step * unit;
+        let zr, zi, cr, ci;
+        if (julia) {
+          zr = cr0; zi = ci0; cr = juliaR; ci = juliaI;
+        } else {
+          // Points inside the main cardioid or the period-2 bulb never escape: skip iterating.
+          const xq = cr0 - 0.25;
+          const q = xq * xq + ci0 * ci0;
+          if (q * (q + xq) <= 0.25 * ci0 * ci0 || (cr0 + 1) * (cr0 + 1) + ci0 * ci0 <= 0.0625) {
+            out[o] = inside;
+            continue;
+          }
+          zr = 0; zi = 0; cr = cr0; ci = ci0;
+        }
+        let zr2 = zr * zr;
+        let zi2 = zi * zi;
+        let i = 0;
+        while (zr2 + zi2 <= BAILOUT && i < maxIter) {
+          zi = 2 * zr * zi + ci;
+          zr = zr2 - zi2 + cr;
+          zr2 = zr * zr;
+          zi2 = zi * zi;
+          i++;
+        }
+        if (i >= maxIter) {
+          out[o] = inside;
+          continue;
+        }
+        // Continuous escape count, so neighbouring bands blend instead of stepping.
+        const smooth = i + 1 - Math.log2(0.5 * Math.log(zr2 + zi2));
+        let t = (smooth * colorSpeed) % 256;
+        if (t < 0) t += 256;
+        out[o] = lut[(t * toLut) | 0];
+      }
+    }
+  }
+
+  palette(params) {
+    if (this.lutKey !== params.palette) {
+      this.lut = Uint32Array.from({ length: LUT_SIZE }, (_, i) => packRgb(paletteColor(params.palette, i / LUT_SIZE)));
+      this.lutKey = params.palette;
+    }
+    return this.lut;
+  }
+
+  onParamChange(p, params, key) {
+    if (key === 'julia') this.resetView(params);
+    this.invalidate();
+  }
+
+  // ---------- interaction (art view only) ----------
+
+  zoomAt(p, x, y, factor, { gesture = false, recenter = false } = {}) {
+    const unit = this.unit(p.width, p.height);
+    const wx = this.centerX + (x - p.width / 2) * unit;
+    const wy = this.centerY + (y - p.height / 2) * unit;
+    this.zoom = Math.min(MAX_ZOOM, Math.max(0.25, this.zoom * factor));
+    if (recenter) {
+      this.centerX = wx;
+      this.centerY = wy;
+    } else {
+      // Keep the point under the cursor in place.
+      const unit2 = this.unit(p.width, p.height);
+      this.centerX = wx - (x - p.width / 2) * unit2;
+      this.centerY = wy - (y - p.height / 2) * unit2;
+    }
+    this.invalidate(gesture);
+  }
+
+  panBy(p, dx, dy) {
+    const unit = this.unit(p.width, p.height);
+    this.centerX -= dx * unit;
+    this.centerY -= dy * unit;
+    this.invalidate(true);
+  }
+
+  attachUI(p) {
+    const canvas = p.canvas;
+    const controller = new AbortController();
+    const on = (type, fn, opts) => canvas.addEventListener(type, fn, { signal: controller.signal, ...opts });
+    const pointers = new Map();
+    let press = null; // { x, y, t, button, moved } while a single pointer is down
+    let lastTap = 0;
+    const local = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    };
+
+    on('pointerdown', (e) => {
+      canvas.setPointerCapture?.(e.pointerId);
+      const [x, y] = local(e);
+      pointers.set(e.pointerId, { x, y });
+      press = pointers.size === 1 ? { x, y, t: performance.now(), button: e.button, moved: false } : null;
+    });
+    on('pointermove', (e) => {
+      const pt = pointers.get(e.pointerId);
+      if (!pt) return;
+      const [x, y] = local(e);
+      if (pointers.size === 1) {
+        if (press && !press.moved && Math.hypot(x - press.x, y - press.y) > 4) press.moved = true;
+        if (!press || press.moved) this.panBy(p, x - pt.x, y - pt.y);
+      } else if (pointers.size === 2) {
+        // Pinch: follow the midpoint and scale by the change in finger distance.
+        const other = [...pointers.values()].find((q) => q !== pt);
+        const before = Math.hypot(pt.x - other.x, pt.y - other.y);
+        const after = Math.hypot(x - other.x, y - other.y);
+        const mx = (x + other.x) / 2;
+        const my = (y + other.y) / 2;
+        this.panBy(p, mx - (pt.x + other.x) / 2, my - (pt.y + other.y) / 2);
+        if (before > 0) this.zoomAt(p, mx, my, after / before, { gesture: true });
+      }
+      pt.x = x;
+      pt.y = y;
+    });
+    const end = (e) => {
+      if (!pointers.delete(e.pointerId)) return;
+      const tap = e.type === 'pointerup' && press && !press.moved && performance.now() - press.t < 500;
+      if (tap) {
+        const [x, y] = local(e);
+        const now = performance.now();
+        if (e.pointerType === 'mouse') {
+          // Click zooms in on the point, right-click zooms out.
+          this.zoomAt(p, x, y, press.button === 2 ? 0.4 : 2.5, { recenter: true });
+        } else if (now - lastTap < 320) {
+          this.zoomAt(p, x, y, 2.5, { recenter: true }); // double-tap
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
+      }
+      if (pointers.size === 0 || tap) press = null;
+    };
+    on('pointerup', end);
+    on('pointercancel', end);
+    on('wheel', (e) => {
+      e.preventDefault();
+      const [x, y] = local(e);
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+      this.zoomAt(p, x, y, Math.exp(-delta * 0.0015), { gesture: true });
+    }, { passive: false });
+    on('contextmenu', (e) => e.preventDefault());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'zoom-controls';
+    overlay.innerHTML = `
+      <span class="zoom-controls__level"></span>
+      <button class="icon-btn" type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">${icon('plus')}</button>
+      <button class="icon-btn" type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">${icon('minus')}</button>
+      <button class="icon-btn" type="button" data-zoom="home" aria-label="Reset view" title="Reset view">${icon('target')}</button>`;
+    overlay.addEventListener('click', (e) => {
+      const action = e.target.closest('[data-zoom]')?.dataset.zoom;
+      if (action === 'in') this.zoomAt(p, p.width / 2, p.height / 2, 2.5);
+      else if (action === 'out') this.zoomAt(p, p.width / 2, p.height / 2, 0.4);
+      else if (action === 'home') this.reset(p, this.params);
+    });
+    (canvas.closest('.art-stage') || canvas.parentElement).appendChild(overlay);
+
+    this.ui = {
+      level: overlay.querySelector('.zoom-controls__level'),
+      remove: () => {
+        controller.abort();
+        overlay.remove();
+      },
+    };
+  }
+
+  destroy() {
+    this.ui?.remove();
+    this.ui = null;
+    if (this.preview) {
+      this.preview.canvas.width = 0;
+      this.preview.canvas.height = 0;
+      this.preview = null;
+    }
+  }
+}
+
+function formatZoom(zoom) {
+  if (zoom < 10) return `×${zoom.toFixed(1)}`;
+  if (zoom < 10_000) return `×${Math.round(zoom)}`;
+  return `×${zoom.toExponential(1).replace('e+', 'e')}`;
+}
+
+function paletteColor(palette, t) {
+  let r, g, b;
+  switch (palette) {
+    case 'fire':
+      r = t * 3 * 255;
+      g = (t - 0.33) * 3 * 255;
+      b = (t - 0.66) * 3 * 255;
+      break;
+    case 'ocean':
+      r = 9 * (1 - t) * t * t * t * 255;
+      g = 15 * (1 - t) * (1 - t) * t * t * 255;
+      b = 8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255 + t * 150;
+      break;
+    case 'grayscale':
+      r = g = b = t * 255;
+      break;
+    case 'electric':
+    default:
+      r = (0.5 + 0.5 * Math.cos(Math.PI * 2 * t)) * 255;
+      g = (0.5 + 0.5 * Math.cos(Math.PI * 2 * (t + 0.33))) * 255;
+      b = (0.5 + 0.5 * Math.cos(Math.PI * 2 * (t + 0.67))) * 255;
+  }
+  return [clamp255(r), clamp255(g), clamp255(b)];
 }

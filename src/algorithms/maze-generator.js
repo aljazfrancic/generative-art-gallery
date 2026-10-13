@@ -1,229 +1,233 @@
 import { ArtAlgorithm } from './base.js';
 
+// Walls as bits per cell, in the order top, right, bottom, left.
+const WALL = [1, 2, 4, 8];
 const DX = [0, 1, 0, -1];
 const DY = [-1, 0, 1, 0];
-const WALL_TOP = 0;
-const WALL_RIGHT = 1;
-const WALL_BOTTOM = 2;
-const WALL_LEFT = 3;
+const OPPOSITE = [2, 3, 0, 1];
+const LINE = 2; // wall thickness in px
 
 export class MazeGenerator extends ArtAlgorithm {
   static meta = {
     name: 'Maze Generator',
-    description: 'Animated recursive backtracker maze generation with optional path solution visualization.',
+    description:
+      'A recursive backtracker carves a perfect maze cell by cell, then a breadth-first search traces the way through.',
     slug: 'maze-generator',
     tags: ['algorithm', 'classic'],
+    finite: true,
   };
 
   cols = 0;
   rows = 0;
-  cells = [];
-  stack = [];
-  current = null;
-  state = 'generating';
-  solutionPath = [];
-  solutionIndex = 0;
-  doneFrames = 0;
+  ox = 0;
+  oy = 0;
+  walls = null;
+  visited = null;
+  stack = null;
+  depth = 0;
+  current = 0;
+  marker = -1;
+  state = 'generating'; // → 'solving' → 'done'
+  path = null;
+  shown = 0;
 
   getControls() {
     return [
       { type: 'slider', key: 'cellSize', label: 'Cell Size', min: 8, max: 40, step: 4, default: 20 },
-      { type: 'color', key: 'wallColor', label: 'Wall Color', default: '#333333' },
+      { type: 'color', key: 'wallColor', label: 'Wall Color', default: '#5c5c70' },
       { type: 'color', key: 'pathColor', label: 'Path Color', default: '#0a0a0a' },
       { type: 'slider', key: 'genSpeed', label: 'Gen Speed (steps/frame)', min: 1, max: 20, step: 1, default: 5 },
-      { type: 'toggle', key: 'showSolution', label: 'Show Solution', default: false },
+      { type: 'toggle', key: 'showSolution', label: 'Show Solution', default: true },
       { type: 'color', key: 'solveColor', label: 'Solution Color', default: '#7c6aef' },
       { type: 'color', key: 'accentColor', label: 'Accent Color', default: '#ef4444' },
     ];
   }
 
   setup(p, params) {
-    this.cols = Math.floor(p.width / params.cellSize);
-    this.rows = Math.floor(p.height / params.cellSize);
-    this.initCells();
-    this.stack = [];
-    this.current = { x: 0, y: 0 };
+    const cs = params.cellSize;
+    this.cols = Math.max(2, Math.floor((p.width - LINE * 2) / cs));
+    this.rows = Math.max(2, Math.floor((p.height - LINE * 2) / cs));
+    this.ox = Math.floor((p.width - this.cols * cs) / 2);
+    this.oy = Math.floor((p.height - this.rows * cs) / 2);
+    const n = this.cols * this.rows;
+    this.walls = new Uint8Array(n).fill(15);
+    this.visited = new Uint8Array(n);
+    this.stack = new Int32Array(n);
+    this.depth = 0;
+    this.current = 0;
+    this.visited[0] = 1;
+    this.marker = -1;
     this.state = 'generating';
-    this.solutionPath = [];
-    this.solutionIndex = 0;
-    this.doneFrames = 0;
-  }
-
-  initCells() {
-    this.cells = [];
-    for (let y = 0; y < this.rows; y++) {
-      this.cells[y] = [];
-      for (let x = 0; x < this.cols; x++) {
-        this.cells[y][x] = {
-          walls: [true, true, true, true],
-          visited: false,
-        };
-      }
-    }
-  }
-
-  getUnvisitedNeighbors(x, y) {
-    const neighbors = [];
-    for (let d = 0; d < 4; d++) {
-      const nx = x + DX[d];
-      const ny = y + DY[d];
-      if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows && !this.cells[ny][nx].visited) {
-        neighbors.push({ x: nx, y: ny, dir: d });
-      }
-    }
-    return neighbors;
-  }
-
-  removeWall(x1, y1, x2, y2) {
-    if (x2 === x1 + 1) {
-      this.cells[y1][x1].walls[WALL_RIGHT] = false;
-      this.cells[y2][x2].walls[WALL_LEFT] = false;
-    } else if (x2 === x1 - 1) {
-      this.cells[y1][x1].walls[WALL_LEFT] = false;
-      this.cells[y2][x2].walls[WALL_RIGHT] = false;
-    } else if (y2 === y1 + 1) {
-      this.cells[y1][x1].walls[WALL_BOTTOM] = false;
-      this.cells[y2][x2].walls[WALL_TOP] = false;
-    } else if (y2 === y1 - 1) {
-      this.cells[y1][x1].walls[WALL_TOP] = false;
-      this.cells[y2][x2].walls[WALL_BOTTOM] = false;
-    }
-  }
-
-  generationStep(p) {
-    if (this.state !== 'generating' || !this.current) return;
-
-    const { x, y } = this.current;
-    this.cells[y][x].visited = true;
-
-    const neighbors = this.getUnvisitedNeighbors(x, y);
-
-    if (neighbors.length > 0) {
-      const next = neighbors[Math.floor(p.random(neighbors.length))];
-      this.removeWall(x, y, next.x, next.y);
-      this.stack.push({ x, y });
-      this.current = { x: next.x, y: next.y };
-    } else if (this.stack.length > 0) {
-      this.current = this.stack.pop();
-    } else {
-      this.state = 'done';
-      this.current = null;
-    }
-  }
-
-  computeSolution() {
-    const start = { x: 0, y: 0 };
-    const end = { x: this.cols - 1, y: this.rows - 1 };
-    const prev = {};
-    const queue = [start];
-    prev[`${start.x},${start.y}`] = null;
-
-    while (queue.length > 0) {
-      const { x, y } = queue.shift();
-      if (x === end.x && y === end.y) break;
-
-      for (let d = 0; d < 4; d++) {
-        if (this.cells[y][x].walls[d]) continue;
-        const nx = x + DX[d];
-        const ny = y + DY[d];
-        if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows) {
-          const key = `${nx},${ny}`;
-          if (!(key in prev)) {
-            prev[key] = { x, y };
-            queue.push({ x: nx, y: ny });
-          }
-        }
-      }
-    }
-
-    this.solutionPath = [];
-    let cur = end;
-    while (cur) {
-      this.solutionPath.unshift(cur);
-      const key = `${cur.x},${cur.y}`;
-      cur = prev[key];
-    }
-    this.solutionIndex = 0;
-  }
-
-  draw(p, params) {
-    const { cellSize, wallColor, pathColor, genSpeed, showSolution, solveColor, accentColor } = params;
-
-    if (this.cols === 0 || this.rows === 0) {
-      this.setup(p, params);
-    }
-
-    if (this.state === 'generating') {
-      for (let i = 0; i < genSpeed; i++) {
-        this.generationStep(p);
-        if (this.state === 'done') break;
-      }
-    } else if (this.state === 'done' && showSolution && this.solutionPath.length === 0) {
-      this.computeSolution();
-    }
-
-    p.background(pathColor);
-
-    const cs = cellSize;
-    const wallCol = p.color(wallColor);
-    const accentCol = p.color(accentColor);
-    const solveCol = p.color(solveColor);
-
-    p.stroke(wallCol);
-    p.strokeWeight(2);
-
-    for (let y = 0; y < this.rows; y++) {
-      for (let x = 0; x < this.cols; x++) {
-        const cell = this.cells[y][x];
-        const px = x * cs;
-        const py = y * cs;
-
-        if (cell.walls[WALL_TOP]) {
-          p.line(px, py, px + cs, py);
-        }
-        if (cell.walls[WALL_RIGHT]) {
-          p.line(px + cs, py, px + cs, py + cs);
-        }
-        if (cell.walls[WALL_BOTTOM]) {
-          p.line(px + cs, py + cs, px, py + cs);
-        }
-        if (cell.walls[WALL_LEFT]) {
-          p.line(px, py + cs, px, py);
-        }
-      }
-    }
-
-    if (this.current && this.state === 'generating') {
-      p.noStroke();
-      p.fill(accentCol);
-      p.rect(this.current.x * cs + 2, this.current.y * cs + 2, cs - 4, cs - 4);
-    }
-
-    if (showSolution && this.solutionPath.length > 0) {
-      p.noStroke();
-      p.fill(solveCol);
-      for (let i = 0; i <= this.solutionIndex; i++) {
-        const cell = this.solutionPath[i];
-        if (cell) {
-          p.rect(cell.x * cs + 2, cell.y * cs + 2, cs - 4, cs - 4);
-        }
-      }
-      if (this.solutionIndex < this.solutionPath.length - 1) {
-        this.solutionIndex = Math.min(this.solutionIndex + 2, this.solutionPath.length - 1);
-      }
-    }
-
-    const isDone = this.state === 'done' &&
-      (!showSolution || this.solutionIndex >= this.solutionPath.length - 1);
-    if (isDone) {
-      this.doneFrames++;
-      if (this.doneFrames >= 60) {
-        this.setup(p, params);
-      }
-    }
+    this.path = null;
+    this.shown = 0;
+    this.redrawAll(p, params);
   }
 
   reset(p, params) {
     this.setup(p, params);
+  }
+
+  isComplete() {
+    return this.state === 'done';
+  }
+
+  /** One backtracker step; returns [cell, direction] of a carved wall, or null. */
+  generationStep() {
+    const { cols, rows } = this;
+    const x = this.current % cols;
+    const y = Math.floor(this.current / cols);
+    const options = [];
+    for (let d = 0; d < 4; d++) {
+      const nx = x + DX[d];
+      const ny = y + DY[d];
+      if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && !this.visited[ny * cols + nx]) options.push(d);
+    }
+    if (options.length > 0) {
+      const d = options[Math.floor(Math.random() * options.length)];
+      const next = (y + DY[d]) * cols + x + DX[d];
+      this.walls[this.current] &= ~WALL[d];
+      this.walls[next] &= ~WALL[OPPOSITE[d]];
+      this.stack[this.depth++] = this.current;
+      this.visited[next] = 1;
+      const carved = [this.current, d];
+      this.current = next;
+      return carved;
+    }
+    if (this.depth > 0) this.current = this.stack[--this.depth];
+    else this.state = 'solving';
+    return null;
+  }
+
+  /** Breadth-first search from the top-left to the bottom-right cell. */
+  solve() {
+    const { cols, walls } = this;
+    const n = walls.length;
+    const prev = new Int32Array(n).fill(-1);
+    const queue = new Int32Array(n);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = 0;
+    prev[0] = 0;
+    while (head < tail) {
+      const cell = queue[head++];
+      if (cell === n - 1) break;
+      for (let d = 0; d < 4; d++) {
+        if (walls[cell] & WALL[d]) continue;
+        const next = cell + DY[d] * cols + DX[d];
+        if (prev[next] === -1) {
+          prev[next] = cell;
+          queue[tail++] = next;
+        }
+      }
+    }
+    const path = [];
+    for (let cell = n - 1; cell !== 0; cell = prev[cell]) path.push(cell);
+    path.push(0);
+    this.path = path.reverse();
+    this.shown = 0;
+  }
+
+  // ---------- drawing (incremental: only what changed) ----------
+
+  cellXY(cell, cs) {
+    return [this.ox + (cell % this.cols) * cs, this.oy + Math.floor(cell / this.cols) * cs];
+  }
+
+  eraseWall(ctx, params, cell, d) {
+    const cs = params.cellSize;
+    const [x, y] = this.cellXY(cell, cs);
+    // Cover the wall's thickness (plus antialiasing) but not its ends: whatever wall still meets
+    // that corner keeps covering it.
+    const t = LINE / 2 + 0.5;
+    const e = LINE / 2;
+    ctx.fillStyle = params.pathColor;
+    if (d === 0) ctx.fillRect(x + e, y - t, cs - 2 * e, 2 * t);
+    else if (d === 1) ctx.fillRect(x + cs - t, y + e, 2 * t, cs - 2 * e);
+    else if (d === 2) ctx.fillRect(x + e, y + cs - t, cs - 2 * e, 2 * t);
+    else ctx.fillRect(x - t, y + e, 2 * t, cs - 2 * e);
+  }
+
+  drawMarker(ctx, params, cell, color) {
+    const cs = params.cellSize;
+    const [x, y] = this.cellXY(cell, cs);
+    const inset = color === params.pathColor ? LINE : LINE + 1;
+    ctx.fillStyle = color;
+    ctx.fillRect(x + inset, y + inset, cs - 2 * inset, cs - 2 * inset);
+  }
+
+  drawPath(ctx, params, from, to) {
+    const cs = params.cellSize;
+    ctx.strokeStyle = params.solveColor;
+    ctx.lineWidth = Math.max(2, cs * 0.3);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const [x0, y0] = this.cellXY(this.path[from], cs);
+    ctx.moveTo(x0 + cs / 2, y0 + cs / 2);
+    if (from === to) ctx.lineTo(x0 + cs / 2 + 0.01, y0 + cs / 2); // a dot, thanks to the round cap
+    for (let i = from + 1; i <= to; i++) {
+      const [x, y] = this.cellXY(this.path[i], cs);
+      ctx.lineTo(x + cs / 2, y + cs / 2);
+    }
+    ctx.stroke();
+  }
+
+  redrawAll(p, params) {
+    const ctx = p.drawingContext;
+    const cs = params.cellSize;
+    p.background(params.pathColor);
+    ctx.strokeStyle = params.wallColor;
+    ctx.lineWidth = LINE;
+    ctx.lineCap = 'square';
+    ctx.beginPath();
+    for (let cell = 0; cell < this.walls.length; cell++) {
+      const [x, y] = this.cellXY(cell, cs);
+      const walls = this.walls[cell];
+      if (walls & 1) { ctx.moveTo(x, y); ctx.lineTo(x + cs, y); }
+      if (walls & 8) { ctx.moveTo(x, y); ctx.lineTo(x, y + cs); }
+      if (walls & 2 && cell % this.cols === this.cols - 1) { ctx.moveTo(x + cs, y); ctx.lineTo(x + cs, y + cs); }
+      if (walls & 4 && cell >= this.walls.length - this.cols) { ctx.moveTo(x, y + cs); ctx.lineTo(x + cs, y + cs); }
+    }
+    ctx.stroke();
+    if (params.showSolution && this.path && this.shown > 0) this.drawPath(ctx, params, 0, this.shown - 1);
+    if (this.state === 'generating' && this.marker >= 0) this.drawMarker(ctx, params, this.marker, params.accentColor);
+  }
+
+  draw(p, params) {
+    const ctx = p.drawingContext;
+    if (this.state === 'generating') {
+      for (let i = 0; i < params.genSpeed && this.state === 'generating'; i++) {
+        const carved = this.generationStep();
+        if (carved) this.eraseWall(ctx, params, carved[0], carved[1]);
+      }
+      if (this.marker >= 0) this.drawMarker(ctx, params, this.marker, params.pathColor);
+      this.marker = this.state === 'generating' ? this.current : -1;
+      if (this.marker >= 0) this.drawMarker(ctx, params, this.marker, params.accentColor);
+    }
+
+    if (this.state === 'solving') {
+      if (!params.showSolution) {
+        this.state = 'done';
+        return;
+      }
+      if (!this.path) this.solve();
+      // Trace the whole path in about three seconds, whatever its length.
+      const perFrame = Math.max(2, Math.ceil(this.path.length / 180));
+      const from = Math.max(0, this.shown - 1);
+      this.shown = Math.min(this.path.length, this.shown + perFrame);
+      this.drawPath(ctx, params, from, this.shown - 1);
+      if (this.shown >= this.path.length) this.state = 'done';
+    }
+  }
+
+  onParamChange(p, params, key) {
+    if (key === 'cellSize') {
+      this.setup(p, params);
+    } else if (key === 'showSolution') {
+      if (params.showSolution && this.state === 'done' && !this.path) this.state = 'solving';
+      this.redrawAll(p, params);
+    } else if (key !== 'genSpeed') {
+      this.redrawAll(p, params);
+    }
   }
 }

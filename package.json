@@ -1,17 +1,28 @@
 {
   "name": "generative-art-gallery",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "An interactive gallery of 13 generative art algorithms drawn in real time with p5.js.",
+  "license": "MIT",
+  "author": "Aljaž Frančič",
+  "homepage": "https://aljazfrancic.github.io/generative-art-gallery/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aljazfrancic/generative-art-gallery.git"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "p5": "^1.11.3"
+    "p5": "^2.3.4"
   },
   "devDependencies": {
-    "vite": "^6.4.3"
+    "vite": "^8.3.4"
   }
 }
