@@ -341,8 +341,6 @@ noscript {
   width: 64px;
   height: 64px;
   margin: 0 auto 18px;
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
 }
 
 .hero__title {
