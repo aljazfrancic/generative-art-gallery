@@ -2,13 +2,13 @@
 
 [![Generative Art Gallery](public/og-image.jpg)](https://aljazfrancic.github.io/generative-art-gallery/)
 
-An interactive gallery of 13 generative art algorithms, drawn in real time in your browser with [p5.js](https://p5js.org/). Flow fields, fractals, cellular automata, reaction-diffusion and more: shape each one with live parameters, then save a PNG, record a video or share a link to exactly what you made.
+An interactive gallery of generative art algorithms, drawn in real time in your browser with [p5.js](https://p5js.org/). Flow fields, fractals, cellular automata, reaction-diffusion and more: shape each one with live parameters, then save a PNG, record a video or share a link to exactly what you made.
 
 **[Open the gallery →](https://aljazfrancic.github.io/generative-art-gallery/)**
 
 ## Features
 
-- **13 algorithms**, all animated live (the Mandelbrot set is yours to explore instead)
+- **Animated live**: every algorithm draws as you watch (the Mandelbrot set is yours to explore instead)
 - **Live parameters**: sliders, colors, toggles and menus apply as you change them
 - **Randomize** for a surprise, **Defaults** to get back to the start
 - **Auto-restart**: pieces that finish (a closed spirograph, a packed canvas, a settled Game of Life, a solved maze, a stabilized reaction) hold for a few seconds, then start afresh. Switch it off to keep the result. On the gallery page the previews loop sooner: circle packing and reaction-diffusion start over within 10 seconds

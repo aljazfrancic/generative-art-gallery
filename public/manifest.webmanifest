@@ -1,7 +1,7 @@
 {
   "name": "Generative Art Gallery",
   "short_name": "Generative Art",
-  "description": "Thirteen generative art algorithms drawing in real time, with live parameters, PNG and video export.",
+  "description": "Generative art algorithms drawing in real time, with live parameters, PNG and video export.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
