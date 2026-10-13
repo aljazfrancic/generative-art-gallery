@@ -86,7 +86,10 @@ export class FractalTree extends ArtAlgorithm {
     branch(0, 0, 0, len, 0, 0);
   }
 
-  /** Scale that keeps the whole tree (at rest, fully grown) inside the canvas. */
+  /**
+   * Scale that keeps the whole tree (at rest, fully grown) inside the canvas. Gallery previews
+   * also zoom in, so the tree fills its card.
+   */
   fitScale(p, params, len) {
     const key = `${p.width}x${p.height}|${params.depth}|${params.angle}|${params.shrink}|${len}`;
     if (this.fit.key !== key) {
@@ -101,7 +104,7 @@ export class FractalTree extends ArtAlgorithm {
         }
       }
       // A little headroom for the wind.
-      const scale = Math.min(1, (p.width * 0.45) / halfWidth, (p.height * 0.9) / height);
+      const scale = Math.min(this.interactive ? 1 : 3, (p.width * 0.45) / halfWidth, (p.height * 0.9) / height);
       this.fit = { key, scale };
     }
     return this.fit.scale;
@@ -129,12 +132,14 @@ export class FractalTree extends ArtAlgorithm {
     const trunk = hexToRgb(params.trunkColor);
     const leaf = hexToRgb(params.leafColor);
     const unit = p.height / 800;
+    // Lines and leaves keep their size when the tree is shrunk to fit, and grow when it's zoomed.
+    const shrunk = Math.min(1, scale);
     for (let level = 0; level < depth; level++) {
       const count = this.segCount[level];
       if (count === 0) break;
       const t = level / Math.max(1, depth - 1);
       ctx.strokeStyle = rgbCss(mixRgb(trunk, leaf, t * t));
-      ctx.lineWidth = Math.max(0.6, thickness * unit * 0.74 ** level) / scale;
+      ctx.lineWidth = Math.max(0.6, thickness * unit * 0.74 ** level) / shrunk;
       ctx.beginPath();
       const seg = this.segs[level];
       for (let i = 0; i < count * 4; i += 4) {
@@ -146,7 +151,7 @@ export class FractalTree extends ArtAlgorithm {
     if (this.leafCount > 0) {
       ctx.fillStyle = rgbCss(leaf, 150 / 255);
       ctx.beginPath();
-      const leafScale = Math.max(0.5, unit) / scale;
+      const leafScale = Math.max(0.5, unit) / shrunk;
       for (let i = 0; i < this.leafCount * 3; i += 3) {
         const r = this.leaves[i + 2] * leafScale;
         ctx.moveTo(this.leaves[i] + r, this.leaves[i + 1]);
