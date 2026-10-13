@@ -6,6 +6,8 @@ const WINDOW = 1500;
 const MIN_SUCCESS_RATE = 0.004;
 const MAX_CIRCLES = 6000;
 const MAX_MS = 60_000;
+// Gallery previews stop placing after 6 s, so with the gallery's hold they start over within 10 s.
+const PREVIEW_MS = 6_000;
 
 export class CirclePacking extends ArtAlgorithm {
   static meta = {
@@ -111,12 +113,32 @@ export class CirclePacking extends ArtAlgorithm {
     return x - r - gap < 0 || x + r + gap > p.width || y - r - gap < 0 || y + r + gap > p.height;
   }
 
+  /** The largest radius circle `c` could have without coming closer than `gap` to anything. */
+  room(p, c, gap) {
+    let room = Math.min(c.x, c.y, p.width - c.x, p.height - c.y) - gap;
+    const { size, cols, rows, cells } = this.grid;
+    const gx = Math.floor(c.x / size);
+    const gy = Math.floor(c.y / size);
+    for (let cy = Math.max(0, gy - 1); cy <= Math.min(rows - 1, gy + 1); cy++) {
+      for (let cx = Math.max(0, gx - 1); cx <= Math.min(cols - 1, gx + 1); cx++) {
+        for (const other of cells[cy * cols + cx]) {
+          if (other !== c) room = Math.min(room, Math.hypot(c.x - other.x, c.y - other.y) - other.r - gap);
+        }
+      }
+    }
+    return room;
+  }
+
   draw(p, params) {
-    const { maxRadius, growSpeed, minGap } = params;
+    const { maxRadius, minGap } = params;
     this.elapsed += p.deltaTime;
+    // Rates are per 60 fps frame (gallery cards draw at 30 fps or less).
+    const pace = Math.min(2, p.deltaTime / (1000 / 60));
+    const growSpeed = params.growSpeed * pace;
 
     if (this.placing) {
-      for (let i = 0; i < params.attemptsPerFrame; i++) {
+      const attempts = Math.max(1, Math.round(params.attemptsPerFrame * pace));
+      for (let i = 0; i < attempts; i++) {
         const x = Math.random() * p.width;
         const y = Math.random() * p.height;
         const ok = !this.outside(p, x, y, 1, minGap) && !this.overlaps(x, y, 1, minGap, null);
@@ -133,20 +155,18 @@ export class CirclePacking extends ArtAlgorithm {
         this.attempts++;
       }
       const full = this.attempts >= WINDOW && this.recentHits / WINDOW < MIN_SUCCESS_RATE;
-      if (full || this.circles.length >= MAX_CIRCLES || this.elapsed > MAX_MS) this.placing = false;
+      const limit = this.interactive ? MAX_MS : PREVIEW_MS;
+      if (full || this.circles.length >= MAX_CIRCLES || this.elapsed > limit) this.placing = false;
     }
 
-    // Grow, then draw only what changed: a bigger circle simply covers its smaller self.
+    // Grow (right up to the nearest neighbour or edge), then draw only what changed: a bigger
+    // circle simply covers its smaller self.
     const ctx = p.drawingContext;
     const stillGrowing = [];
     for (const c of this.growing) {
-      const r = Math.min(maxRadius, c.r + growSpeed);
-      if (this.outside(p, c.x, c.y, r, minGap) || this.overlaps(c.x, c.y, r, minGap, c)) {
-        // Can't grow any further.
-      } else {
-        c.r = r;
-        if (r < maxRadius) stillGrowing.push(c);
-      }
+      const room = this.room(p, c, minGap);
+      c.r = Math.max(c.r, Math.min(maxRadius, c.r + growSpeed, room));
+      if (c.r < maxRadius && c.r < room) stillGrowing.push(c);
       this.drawCircle(ctx, params, c);
     }
     this.growing = stillGrowing;
@@ -155,8 +175,8 @@ export class CirclePacking extends ArtAlgorithm {
   drawCircle(ctx, params, c) {
     ctx.beginPath();
     if (params.outlined) {
-      // Clear the previous, smaller ring first.
-      ctx.arc(c.x, c.y, c.r + 0.5, 0, Math.PI * 2);
+      // Clear the previous, smaller ring first (only inside the new one: neighbours can be close).
+      ctx.arc(c.x, c.y, Math.max(0, c.r - 0.5), 0, Math.PI * 2);
       ctx.fillStyle = params.bgColor;
       ctx.fill();
       ctx.beginPath();
