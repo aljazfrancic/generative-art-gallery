@@ -299,21 +299,21 @@ noscript {
   color: #1a2332;
 }
 
+/* Sun and moon only cross-fade; the thumb's slide is the motion. Growing and spinning them
+   left the settled sun misshapen in real browsers (its rays and core out of line). */
 .theme-switch__glyph {
   grid-area: 1 / 1;
   width: 1rem;
   height: 1rem;
-  transition: opacity 0.3s ease, transform 0.45s var(--spring);
+  transition: opacity 0.3s ease;
 }
 
 .theme-switch__glyph--sun {
   opacity: calc(1 - var(--is-dark));
-  transform: rotate(calc(var(--is-dark) * 120deg)) scale(calc(1 - var(--is-dark) * 0.6));
 }
 
 .theme-switch__glyph--moon {
   opacity: var(--is-dark);
-  transform: rotate(calc((1 - var(--is-dark)) * -120deg)) scale(calc(0.4 + var(--is-dark) * 0.6));
 }
 
 /* ─── Gallery ────────────────────────────────────────────── */
