@@ -287,7 +287,9 @@ noscript {
   border-radius: 50%;
   background-color: #f59e0b;
   color: #fffbeb;
-  box-shadow: 0 1px 3px rgba(15, 20, 25, 0.3), 0 0 12px rgba(245, 158, 11, 0.6);
+  /* A ring in the track's colour keeps a clear gap between the thumb and the border
+     (an outer glow used to spill over the track's edge). */
+  box-shadow: 0 0 0 2px var(--bg-raised), 0 1px 4px rgba(15, 20, 25, 0.35);
   transform: translateX(calc(var(--is-dark) * var(--travel)));
   transition: transform 0.45s var(--spring), background-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
 }
@@ -295,7 +297,6 @@ noscript {
 :root[data-theme='dark'] .theme-switch__thumb {
   background-color: #e2e8f0;
   color: #1a2332;
-  box-shadow: 0 1px 3px rgba(15, 20, 25, 0.3), 0 0 12px rgba(226, 232, 240, 0.35);
 }
 
 .theme-switch__glyph {
